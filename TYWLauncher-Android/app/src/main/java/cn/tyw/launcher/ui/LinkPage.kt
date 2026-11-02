@@ -26,7 +26,7 @@ fun LinkPage() {
     ) {
         TywCard("联机方式") {
             SettingRow("EasyTier") { ValueText("与 Windows 版房间互通") }
-            SettingRow("设备码") { ValueText(Settings.deviceCode) }
+            CopyRow("设备码", Settings.deviceCode)
             SettingRow("服务端") { ValueText(if (Server.online) "已连接" else "离线") }
             HintText("Android 端的 EasyTier 客户端会在运行时接入后开放，节点列表与 Windows 版共用服务端配置。")
         }
@@ -64,16 +64,16 @@ fun MorePage() {
         }
         TywCard("开源与致谢") {
             Text(
-                "触控布局的数据结构与默认键位参考 Fold Craft Launcher（FCL）的 ControlLayout，" +
-                    "启动参数生成沿用 Windows 版 TYW Launcher 的实现。" +
-                    "本启动器只支持 Java 版，不提供基岩版。",
+                "触控布局的数据结构、默认键位与操作逻辑参考 Fold Craft Launcher（FCL，GPL-3.0），" +
+                    "启动参数生成沿用 Windows 版 TYW Launcher 的实现，UI 配色与布局对齐 Windows 版。" +
+                    "本启动器只支持 Java 版，不提供基岩版。详见仓库 README。",
                 fontSize = 12.sp,
                 color = p.textSub,
                 lineHeight = 18.sp
             )
         }
         TywCard("设备信息") {
-            SettingRow("设备码") { ValueText(Settings.deviceCode) }
+            CopyRow("设备码", Settings.deviceCode, hint = "与 Windows 版同样的 XXXX-XXXX-XXXX-XXXX 格式。")
             SettingRow("通道") { ValueText(AppInfo.channel.display) }
             SettingRow("服务器状态") { ValueText(if (Server.online) "在线" else "离线：${Server.lastError}") }
         }

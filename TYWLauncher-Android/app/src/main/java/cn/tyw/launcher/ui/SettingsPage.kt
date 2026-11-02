@@ -158,12 +158,49 @@ fun SettingsPage(
             HintText("切换会下载对应通道的 APK 并交给系统安装器，数据不受影响。内测版需要有效内测码，启动时会联网校验。")
         }
 
+        // ===== Java 运行环境（对应 Windows 设置-启动设置里的 Java） =====
+        TywCard("Java 运行环境") {
+            var javaPath by remember { mutableStateOf(JavaRuntime.detect() ?: "") }
+            var javaBusy by remember { mutableStateOf(false) }
+            var javaProgress by remember { mutableFloatStateOf(0f) }
+            var javaStatus by remember { mutableStateOf("") }
+            SettingRow("Java 路径") {
+                Text(
+                    javaPath.ifEmpty { "未检测到" },
+                    fontSize = 11.5.sp,
+                    color = if (javaPath.isEmpty()) p.textHint else p.textSub
+                )
+            }
+            if (javaBusy) {
+                LinearProgressIndicator(progress = { javaProgress }, modifier = Modifier.fillMaxWidth())
+                Text("${javaStatus} ${(javaProgress * 100).toInt()}%", fontSize = 11.sp, color = p.textHint)
+            }
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TywButton("自动补全 Java", highlight = javaPath.isEmpty(), enabled = !javaBusy) {
+                    javaBusy = true
+                    javaStatus = "准备中…"
+                    scope.launch {
+                        val r = JavaRuntime.ensure(
+                            progress = { javaProgress = it.toFloat() },
+                            status = { javaStatus = it }
+                        )
+                        javaBusy = false
+                        javaPath = r.path
+                        if (!r.ok) javaStatus = r.message
+                        Toast.makeText(context, if (r.ok) "Java 已就绪" else r.message, Toast.LENGTH_LONG).show()
+                    }
+                }
+                TywButton("重新检测", enabled = !javaBusy) { javaPath = JavaRuntime.detect() ?: "" }
+            }
+            HintText("先扫启动器自带的运行时，没有就按服务端下发的地址下载，解压到 files/java 并自动写回设置。")
+        }
+
         // ===== 触控布局 =====
         TywCard("触控布局") {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text("按键布局编辑器", fontSize = 13.sp, color = p.c1)
-                    Text("拖动摆位，可保存 / 恢复默认（FCL 风格布局）", fontSize = 11.5.sp, color = p.textHint)
+                    Text("拖动摆位，可保存 / 恢复默认（FCL 键位）", fontSize = 11.5.sp, color = p.textHint)
                 }
                 TywButton("编辑", highlight = true, onClick = onOpenTouchLayout)
             }
@@ -174,8 +211,9 @@ fun SettingsPage(
             SettingRow("版本") { ValueText("${AppInfo.versionName}（版本码 ${AppInfo.versionCode}）") }
             SettingRow("通道") { ValueText(AppInfo.channel.display) }
             SettingRow("运行环境") { ValueText("Android ${android.os.Build.VERSION.RELEASE}") }
-            SettingRow("设备码") { ValueText(Settings.deviceCode) }
             SettingRow("服务器") { ValueText(if (Server.online) "已连接" else "离线") }
+            CopyRow("设备码", Settings.deviceCode, hint = "格式与 Windows 版一致（XXXX-XXXX-XXXX-XXXX），服务端按它发放内测码。")
+            CopyRow("授权码", Settings.authCode, hint = "正版登录时自动复制，也可以在这里手动复制。")
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TywButton("检查更新", highlight = true) {
                     scope.launch {

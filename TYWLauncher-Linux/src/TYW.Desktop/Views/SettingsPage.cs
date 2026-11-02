@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using TYW.Desktop.Controls;
@@ -290,7 +291,7 @@ public static class SettingsPage
             }));
 
         stack.Children.Add(Row("联机方式", Value("EasyTier（与 Windows 版房间互通）")));
-        stack.Children.Add(Row("设备码", Value(ModSecret.DeviceCode)));
+        stack.Children.Add(Row("设备码", CopyValue(ModSecret.DeviceCode)));
 
         return card;
     }
@@ -439,7 +440,7 @@ public static class SettingsPage
         stack.Children.Add(Row("运行环境", Value("Linux " + ModApp.RuntimeArch + " · .NET " +
             Environment.Version.ToString(3))));
         stack.Children.Add(Row("数据目录", Value(ModPaths.Root)));
-        stack.Children.Add(Row("设备码", Value(ModSecret.DeviceCode)));
+        stack.Children.Add(Row("设备码", CopyValue(ModSecret.DeviceCode)));
 
         var buttons = new StackPanel
         {
@@ -692,8 +693,30 @@ public static class SettingsPage
         MaxWidth = 420
     };
 
-    internal static Control Row(string title, Control right)
+    /// <summary>值 + 「复制」按钮，用于设备码 / 授权码这类需要手动复制的内容。</summary>
+    internal static Control CopyValue(string text)
     {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        panel.Children.Add(Value(text));
+        var btn = new PclButton { Text = "复制", Height = 28, Width = 64 };
+        btn.Click += (_, _) =>
+        {
+            try
+            {
+                var top = TopLevel.GetTopLevel(btn);
+                _ = top?.Clipboard?.SetTextAsync(text ?? "");
+                ModStartup.HintPublic("已成功复制！", false);
+            }
+            catch (Exception ex)
+            {
+                ModLog.Err(ex, "复制文本");
+            }
+        };
+        panel.Children.Add(btn);
+        return panel;
+    }
+
+    internal static Control Row(string title, Control right)    {
         var grid = new Grid { MinHeight = 34 };
         grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
         grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));

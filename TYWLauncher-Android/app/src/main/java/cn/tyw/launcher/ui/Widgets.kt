@@ -24,7 +24,8 @@ enum class TywPage(val title: String) {
 }
 
 /**
- * 顶部渐变标题栏：左侧 TYW 标志，中间导航（对应 Windows 版 FrmMain.PanTitle）。
+ * 顶部渐变标题栏：左侧 TYW 标志 + 标题，中间导航，右侧版本号。
+ * 尺寸与配色对齐 Windows 版 FrmMain 的 PanTitle（56 高、选中项白色胶囊）。
  */
 @Composable
 fun TywTopBar(current: TywPage, onSelect: (TywPage) -> Unit) {
@@ -32,22 +33,36 @@ fun TywTopBar(current: TywPage, onSelect: (TywPage) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(56.dp)
             .background(p.topBar)
     ) {
-        Text(
-            text = "TYW",
-            color = Color.White,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
+        Row(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 16.dp)
-        )
+                .padding(start = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0x33FFFFFF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("T", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "TYW Launcher",
+                color = Color.White,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
         Row(
             modifier = Modifier
                 .align(Alignment.Center)
-                .padding(start = 8.dp),
+                .padding(start = 40.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -70,6 +85,14 @@ fun TywTopBar(current: TywPage, onSelect: (TywPage) -> Unit) {
                 }
             }
         }
+        Text(
+            text = cn.tyw.launcher.core.AppInfo.versionName,
+            color = Color(0x99FFFFFF),
+            fontSize = 11.sp,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp)
+        )
     }
 }
 
@@ -163,8 +186,7 @@ fun TywButton(
 
 /** 次要说明文字。 */
 @Composable
-fun HintText(text: String, modifier: Modifier = Modifier) {
-    val p = LocalPalette.current
+fun HintText(text: String, modifier: Modifier = Modifier) {    val p = LocalPalette.current
     Text(
         text,
         fontSize = 11.5.sp,
@@ -178,6 +200,37 @@ fun HintText(text: String, modifier: Modifier = Modifier) {
 fun ValueText(text: String, modifier: Modifier = Modifier) {
     val p = LocalPalette.current
     Text(text, fontSize = 12.5.sp, color = p.textSub, modifier = modifier)
+}
+
+/**
+ * 「标题 + 值 + 复制」一行，对应 Windows 版设置-其他里的「复制识别码」：
+ * 值本身可以点一下复制，右边的按钮也能复制，复制成功统一 Toast「已成功复制！」。
+ */
+@Composable
+fun CopyRow(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    hint: String = "",
+) {
+    val p = LocalPalette.current
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 12.5.sp, color = p.c1)
+                Text(
+                    value.ifEmpty { "—" },
+                    fontSize = 12.5.sp,
+                    color = p.textSub,
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .clickable(enabled = value.isNotEmpty()) { cn.tyw.launcher.core.Clip.copy(value, title) }
+                )
+            }
+            TywButton("复制", enabled = value.isNotEmpty()) { cn.tyw.launcher.core.Clip.copy(value, title) }
+        }
+        if (hint.isNotEmpty()) HintText(hint)
+    }
 }
 
 /** 页面统一的滚动容器内边距。 */

@@ -8,7 +8,13 @@ launch the copy of the game they already own. No ads, no in-app purchases, no mo
 
 - Source code (auditable): https://github.com/TYW-MC/TYW-Minecraft-Launcher
 - Issue tracker: https://github.com/TYW-MC/TYW-Minecraft-Launcher/issues
-- Platform: Windows x64 · VB.NET / WPF · .NET Framework 4.8
+- Platforms:
+  - **Windows** x64 · VB.NET / WPF · .NET Framework 4.8
+  - **Linux** x64 · Avalonia 12 (VB.NET core + C# UI) · amd64
+  - **Android** 8.0+ · Kotlin / Jetpack Compose · arm64-v8a
+
+All three platforms share the same UI structure, the same 15-preset theme engine, the same three release channels
+(Release / Snapshot / Beta) and the same server protocol.
 
 Game files are **not** redistributed here; they are downloaded at runtime from official / official-mirror CDNs.
 The launcher does not bypass authentication or entitlement checks — online play requires owning Minecraft: Java
@@ -63,9 +69,34 @@ The client expects these HTTP endpoints:
 
 The device ID is a machine-derived fingerprint shown in the ban dialog, so users can send it to you for (un)banning.
 
+## Android App
+
+`TYWLauncher-Android/` is a native Android client rebuilt from the Windows XAML layouts (same top gradient bar,
+same cards / rows / buttons, same palette engine), with the same server protocol:
+
+- **Microsoft sign-in**: OAuth *device code* flow. The **authorisation code is copied to the clipboard the moment it
+  is issued**, and can be copied again from the dialog, the launcher page or Settings → About. No password ever
+  touches the app.
+- **Device code**: identical format to Windows — `XXXX-XXXX-XXXX-XXXX`, derived from a stable device fingerprint
+  (MD5 of `ANDROID_ID|manufacturer|model|device|fingerprint`, first 16 hex chars, uppercased). Both the device code
+  and the authorisation code have a one-tap **Copy** button, and tapping the value copies it too.
+- **Java auto-provisioning**: scans the launcher's own runtime directory and common system paths; if nothing is
+  found it downloads the runtime listed as `Link.JavaDownloadsAndroid` in `config.json` (falling back to
+  `java-android-<arch>.zip` on the server), extracts `.zip` / `.tar.gz`, marks `bin/java` executable and stores the
+  path. One button — *自动补全 Java*.
+- **Touch controls**: layout data model, default keymap and editing behaviour follow **Fold Craft Launcher (FCL)** —
+  movement joystick, view area, attack / use, jump / sneak / sprint, inventory, chat, drop, swap-offhand,
+  perspective toggle, pause menu and the 9-slot hotbar. Positions are stored as screen-relative percentages and can
+  be exported as JSON.
+- **Channels**: three separately built APKs (`TYWLauncher-android.apk`, `-snapshot`, `-beta`) served from the same
+  `config.json` → `Android.Channels.<channel>.{VersionCode,File}`, with the beta APK protected by device code + beta
+  key on the server.
+
+Java Edition only — no Bedrock edition is offered on any platform.
+
 ## Building
 
-Requirements: **Windows**, **Visual Studio 2022** (with the .NET desktop development workload) or the **.NET Framework 4.8 Developer Pack**.
+**Windows** — requirements: **Windows**, **Visual Studio 2022** (with the .NET desktop development workload) or the **.NET Framework 4.8 Developer Pack**.
 
 ```bash
 msbuild "TYW Launcher.sln" /restore /p:Configuration=Release /m
@@ -75,12 +106,19 @@ msbuild "TYW Launcher.sln" /restore /p:Configuration=Release /m
 - `Snapshot` → Snapshot channel
 - `Release` → Stable channel
 
-Or just push a tag (`v*`) — **GitHub Actions builds automatically and attaches the exe to a GitHub Release**.
+**Linux** — `dotnet publish TYWLauncher-Linux/src/TYW.Desktop/TYW.Desktop.csproj -c Release -r linux-x64 -p:TYWChannel=Release`
+
+**Android** — `./gradlew assembleRelease -PtywChannel=release|snapshot|beta`
+
+Or just push a tag (`v*`) — **GitHub Actions builds all three platforms automatically and attaches every artefact
+(Windows exe, Linux tar.gz ×3, Android APK ×3) to a GitHub Release**.
 
 ## Repository Layout
 
 ```
-TYW Launcher/             Main launcher project (VB.NET WPF, .NET Framework 4.8)
+TYW Launcher/             Windows launcher project (VB.NET WPF, .NET Framework 4.8)
+TYWLauncher-Linux/        Linux launcher (Avalonia 12)
+TYWLauncher-Android/      Android launcher (Kotlin / Jetpack Compose)
 PCLCS/                    PCL core support code (from the upstream open-source release)
 MeloongCore/              Git submodule (Apache-2.0, https://github.com/Meloong-Git/MeloongCore)
 ```
@@ -89,6 +127,10 @@ MeloongCore/              Git submodule (Apache-2.0, https://github.com/Meloong-
 
 - The original PCL2 code is © LTCat / Meloong-Git, released under its own license — see [`LICENCE`](LICENCE) (the upstream license file, kept unmodified).
 - [`MeloongCore`](MeloongCore/LICENSE.txt) is licensed under **Apache-2.0** by the Meloong/PCL community.
+- **Android touch controls** are modelled on **[Fold Craft Launcher (FCL)](https://github.com/FCL-Team/FoldCraftLauncher)**
+  (GPL-3.0): the control layout data model, the default keymap, and the way controls are placed and edited all follow
+  FCL's `ControlLayout`. FCL is a separate project and is not bundled here — only the layout design is re-implemented
+  for this launcher. Thanks to the FCL team for publishing their work.
 - All modifications in this repository are by **TYW-MC**.
 - The server-side implementation is proprietary and not part of this repository.
 

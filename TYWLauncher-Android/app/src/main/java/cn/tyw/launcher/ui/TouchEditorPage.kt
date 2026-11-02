@@ -116,10 +116,11 @@ fun TouchEditorPage(onClose: () -> Unit) {
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (control.kind == ControlKind.JOYSTICK) {
-                            JoystickVisual(control, selected == control.id)
-                        } else {
-                            ButtonVisual(control, selected == control.id)
+                        when (control.kind) {
+                            ControlKind.JOYSTICK -> JoystickVisual(control, selected == control.id)
+                            ControlKind.HOTBAR -> HotbarVisual(control, selected == control.id)
+                            ControlKind.VIEW -> ViewVisual(control, selected == control.id)
+                            ControlKind.BUTTON -> ButtonVisual(control, selected == control.id)
                         }
                     }
                 }
@@ -161,5 +162,52 @@ private fun ButtonVisual(control: TouchControl, selected: Boolean) {
         contentAlignment = Alignment.Center
     ) {
         Text(control.label, fontSize = 10.sp, color = Color(0xCCFFFFFF))
+    }
+}
+
+/** 物品栏：FCL 里是横排 9 格，点哪格切哪格。 */
+@Composable
+private fun HotbarVisual(control: TouchControl, selected: Boolean) {
+    val p = LocalPalette.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0x22000000))
+            .border(if (selected) 2.dp else 1.dp, if (selected) p.c4 else Color(0x55FFFFFF), RoundedCornerShape(4.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(9) { i ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(1.dp)
+                    .background(Color(0x33FFFFFF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("${i + 1}", fontSize = 9.sp, color = Color(0xAAFFFFFF))
+            }
+        }
+    }
+}
+
+/** 视角区：虚线框提示「这里滑动转视角」。 */
+@Composable
+private fun ViewVisual(control: TouchControl, selected: Boolean) {
+    val p = LocalPalette.current
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) p.c4 else Color(0x44FFFFFF),
+                RoundedCornerShape(8.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(control.label, fontSize = 10.sp, color = Color(0x88FFFFFF))
     }
 }

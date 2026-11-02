@@ -921,7 +921,7 @@ public static class StaticPage
                         ModSettings.SetValue("LinkLatencyMode", i.ToString());
                         ModSettings.Save();
                     }));
-                stack.Children.Add(Row("设备码", ModSecret.DeviceCode));
+                stack.Children.Add(SettingsPage.Row("设备码", SettingsPage.CopyValue(ModSecret.DeviceCode)));
                 break;
 
             case "个性化":
@@ -933,7 +933,7 @@ public static class StaticPage
                 stack.Children.Add(Row("TYW Launcher", "Linux 版 " + ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "）"));
                 stack.Children.Add(Row("数据目录", ModPaths.Root));
                 stack.Children.Add(Row("日志目录", ModPaths.LogDir));
-                stack.Children.Add(Row("设备码", ModSecret.DeviceCode));
+                stack.Children.Add(SettingsPage.Row("设备码", SettingsPage.CopyValue(ModSecret.DeviceCode)));
                 var checkBtn = new PclButton
                 {
                     Text = "检查更新",
