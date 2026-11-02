@@ -16,9 +16,9 @@ using System.Threading.Tasks;
 namespace TYW.Desktop.Views;
 
 /// <summary>
-/// 实例管理窗口。对应 Windows 版 Pages/PageInstance：
-/// 左栏是已安装版本，右栏是 概览 / 设置 / Mod 管理 / 存档 / 操作（重命名、删除、导出）。
-/// 从启动页的「版本选择」进入。
+/// 版本选择 / 版本设置窗口。对应 Windows 版 Pages/PageSelect 与 Pages/PageInstance：
+/// 左栏是已安装版本，右栏是 概览 / 启动设置 / Mod 管理 / 存档 / 操作（重命名、删除、导出）。
+/// 从启动页的「版本选择」「版本设置」进入，asSettings = True 时标题为「版本设置」并直接定位到当前版本。
 /// </summary>
 public class InstanceWindow : Window
 {
@@ -29,10 +29,10 @@ public class InstanceWindow : Window
     private McVersionItem _current;
     private readonly Action _onPicked;
 
-    public InstanceWindow(Action onPicked = null)
+    public InstanceWindow(Action onPicked = null, bool asSettings = false)
     {
         _onPicked = onPicked;
-        Title = "版本选择与实例管理";
+        Title = asSettings ? "版本设置" : "版本选择与实例管理";
         Width = 900;
         Height = 600;
         MinWidth = 760;
@@ -182,6 +182,9 @@ public class InstanceWindow : Window
         overview.Stack.Children.Add(Kv("启动 Java", JavaLabel()));
         _rightHost.Children.Add(overview.Card);
 
+        // 启动设置（对应 Windows 版本设置 → 设置；Linux 版的启动参数是全局的，与「设置 → 启动」共用同一份配置）
+        _rightHost.Children.Add(BuildLaunchSettingsCard());
+
         // Mod 管理
         var mods = NewCard("Mod 管理");
         mods.Stack.Children.Add(ModList(v));
@@ -217,6 +220,121 @@ public class InstanceWindow : Window
             Margin = new Thickness(0, 6, 0, 0)
         });
         _rightHost.Children.Add(ops.Card);
+    }
+
+    // ================= 启动设置 =================
+
+    /// <summary>版本设置里的「启动设置」卡片：Java、内存、窗口大小、JVM 参数。</summary>
+    private Control BuildLaunchSettingsCard()
+    {
+        var (card, stack) = NewCard("启动设置");
+
+        stack.Children.Add(SettingsPage.ComboRow("Java 路径", SettingsPage.JavaOptions(), SettingsPage.JavaSelected(), i =>
+        {
+            if (i <= 0)
+            {
+                ModSettings.SetValue("LaunchJavaExe", "");
+            }
+            else
+            {
+                var javaList = ModJava.ListJava();
+                if (i - 1 < javaList.Count) ModSettings.SetValue("LaunchJavaExe", javaList[i - 1].Path);
+            }
+            ModSettings.Save();
+        }));
+
+        // 内存：自动 / 1~16 GB，只列出不超过物理内存的档位
+        var totalMb = SettingsPage.SystemMemoryMb();
+        var capMb = Math.Max(2048, totalMb - 1024);
+        var steps = new[] { 1024, 2048, 3072, 4096, 6144, 8192, 12288, 16384 };
+        var ramOptions = new List<string> { "自动配置（推荐）" };
+        var ramValues = new List<int> { 0 };
+        foreach (var mb in steps)
+        {
+            if (mb > capMb) continue;
+            ramOptions.Add(mb / 1024 + " GB");
+            ramValues.Add(mb);
+        }
+        var curRam = ModSettings.GetInt("LaunchRam", 0);
+        var ramSel = ramValues.IndexOf(curRam);
+        if (ramSel < 0) ramSel = 0;
+        stack.Children.Add(SettingsPage.ComboRow("游戏内存", ramOptions, ramSel, i =>
+        {
+            var mb = i >= 0 && i < ramValues.Count ? ramValues[i] : 0;
+            ModSettings.SetValue("LaunchRam", mb.ToString());
+            ModSettings.Save();
+        }));
+
+        // 窗口大小：全屏 / 窗口化 + 宽高
+        var sizePanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var comboType = new PclComboBox { IsEditable = false, Width = 92 };
+        comboType.SetItems(new[] { "窗口化", "全屏" }, ModSettings.GetBool("LaunchFullscreen") ? 1 : 0);
+        var txtWidth = SettingsPage.NumberBox(ModSettings.GetInt("LaunchWindowWidth", 854), 72);
+        var txtHeight = SettingsPage.NumberBox(ModSettings.GetInt("LaunchWindowHeight", 480), 72);
+        var labX = new TextBlock
+        {
+            Text = "×",
+            FontSize = 13,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrushGray2"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        void SyncEnabled()
+        {
+            var fs = comboType.SelectedIndex == 1;
+            txtWidth.IsEnabled = !fs;
+            txtHeight.IsEnabled = !fs;
+            labX.Opacity = fs ? 0.4 : 1;
+        }
+        SyncEnabled();
+
+        comboType.SelectionChanged += (_, _) =>
+        {
+            ModSettings.SetValue("LaunchFullscreen", comboType.SelectedIndex == 1);
+            ModSettings.Save();
+            SyncEnabled();
+        };
+        txtWidth.TextChanged += (_, _) => SettingsPage.SaveInt(txtWidth.Text, "LaunchWindowWidth", 854);
+        txtHeight.TextChanged += (_, _) => SettingsPage.SaveInt(txtHeight.Text, "LaunchWindowHeight", 480);
+
+        sizePanel.Children.Add(comboType);
+        sizePanel.Children.Add(txtWidth);
+        sizePanel.Children.Add(labX);
+        sizePanel.Children.Add(txtHeight);
+        stack.Children.Add(SettingsPage.Row("窗口大小", sizePanel));
+
+        var jvm = new PclComboBox
+        {
+            IsEditable = true,
+            Width = 300,
+            Placeholder = "留空则使用默认参数",
+            Text = ModSettings.GetString("LaunchJvmExtra", "")
+        };
+        jvm.TextChanged += (_, _) =>
+        {
+            ModSettings.SetValue("LaunchJvmExtra", jvm.Text ?? "");
+            ModSettings.Save();
+        };
+        stack.Children.Add(SettingsPage.Row("JVM 参数", jvm));
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "这些是全局启动参数，和「设置 → 启动」里的同一份配置，修改后下一次启动生效。",
+            FontSize = 11.5,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrushGray3"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        return card;
     }
 
     // ================= Mod / 存档 =================

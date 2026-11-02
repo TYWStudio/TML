@@ -569,7 +569,7 @@ public static class SettingsPage
         return (card, stack);
     }
 
-    private static TextBlock Value(string text) => new TextBlock
+    internal static TextBlock Value(string text) => new TextBlock
     {
         Text = text,
         FontSize = 12.5,
@@ -581,7 +581,7 @@ public static class SettingsPage
         MaxWidth = 420
     };
 
-    private static Control Row(string title, Control right)
+    internal static Control Row(string title, Control right)
     {
         var grid = new Grid { MinHeight = 34 };
         grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
@@ -602,7 +602,7 @@ public static class SettingsPage
         return grid;
     }
 
-    private static Control ComboRow(string title, List<string> options, int selected, Action<int> changed)
+    internal static Control ComboRow(string title, List<string> options, int selected, Action<int> changed)
     {
         var combo = new PclComboBox
         {
@@ -615,7 +615,7 @@ public static class SettingsPage
         return Row(title, combo);
     }
 
-    private static PclComboBox NumberBox(int value, double width) => new PclComboBox
+    internal static PclComboBox NumberBox(int value, double width) => new PclComboBox
     {
         IsEditable = true,
         Width = width,
@@ -623,7 +623,7 @@ public static class SettingsPage
         HorizontalAlignment = HorizontalAlignment.Right
     };
 
-    private static void SaveInt(string text, string key, int def)
+    internal static void SaveInt(string text, string key, int def)
     {
         if (int.TryParse((text ?? "").Trim(), out var v) && v > 0)
         {
@@ -637,14 +637,14 @@ public static class SettingsPage
         }
     }
 
-    private static List<string> JavaOptions()
+    internal static List<string> JavaOptions()
     {
         var list = new List<string> { "自动选择（推荐）" };
         foreach (var j in ModJava.ListJava()) list.Add(j.Path + "    " + j.Display);
         return list;
     }
 
-    private static int JavaSelected()
+    internal static int JavaSelected()
     {
         var saved = ModSettings.GetString("LaunchJavaExe");
         if (string.IsNullOrEmpty(saved)) return 0;
@@ -655,7 +655,7 @@ public static class SettingsPage
     }
 
     /// <summary>物理内存总量（MB），读 /proc/meminfo。</summary>
-    private static int SystemMemoryMb()
+    internal static int SystemMemoryMb()
     {
         try
         {

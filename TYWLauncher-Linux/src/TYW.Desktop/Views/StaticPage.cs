@@ -660,8 +660,21 @@ public static class StaticPage
 
             host.Children.Insert(0, card);
 
+            // 安装目标目录：失败/取消时若原本不存在，就把半成品删掉，避免留下打不开的残留版本
+            var installDir = System.IO.Path.Combine(ModPaths.McFolder, "versions", kind == 0 ? target.Id : name);
+            var existedBefore = System.IO.Directory.Exists(installDir);
+
             var canceled = false;
-            btnCancel.Click += (_, _) => canceled = true;
+            btnCancel.Click += (_, _) =>
+            {
+                if (btnCancel.Text == "重试安装")
+                {
+                    // 直接重新走一遍安装（会重置进度、任务栏状态与按钮）
+                    StartInstall(host, target, name, kind, loaderVer, fabricApi, rebuild);
+                    return;
+                }
+                canceled = true;
+            };
 
             // 右下角任务按钮（对应 Windows 的 BtnExtraDownload 任务栏）
             var task = TaskCenter.Begin("安装 " + name +
@@ -669,6 +682,24 @@ public static class StaticPage
 
             _ = Task.Run(() =>
             {
+                // 只清理本次新建的目录；覆盖安装不动原有文件
+                void CleanupResidue()
+                {
+                    if (existedBefore) return;
+                    try
+                    {
+                        if (System.IO.Directory.Exists(installDir))
+                        {
+                            System.IO.Directory.Delete(installDir, true);
+                            ModLog.Info("已清理安装残留：" + installDir);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ModLog.Err(ex, "清理安装残留");
+                    }
+                }
+
                 try
                 {
                     void Report(double p, string s)
@@ -719,9 +750,10 @@ public static class StaticPage
                 }
                 catch (OperationCanceledException)
                 {
+                    CleanupResidue();
                     Dispatcher.UIThread.Post(() =>
                     {
-                        status.Text = "已取消安装。";
+                        status.Text = "已取消安装，残留文件已清理。";
                         btnCancel.IsVisible = false;
                         btnBack.IsVisible = true;
                     });
@@ -729,9 +761,11 @@ public static class StaticPage
                 catch (Exception ex)
                 {
                     ModLog.Err(ex, "安装版本 " + target.Id);
+                    CleanupResidue();
                     Dispatcher.UIThread.Post(() =>
                     {
-                        status.Text = "安装失败：" + ex.Message;
+                        status.Text = "安装失败：" + ex.Message +
+                                      (existedBefore ? "" : "\n已清理本次安装残留的文件。");
                         btnCancel.Text = "重试安装";
                         btnCancel.IsVisible = true;
                         btnBack.IsVisible = true;

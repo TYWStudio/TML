@@ -54,6 +54,19 @@ public partial class PageLaunchLeft : UserControl
             var win = new InstanceWindow(() => Build());
             await win.ShowDialog(owner);
         };
+        // 版本设置：仅在有选中版本时出现（对应 Windows PageLaunchLeft.RefreshButtonsUI 的 CurrentState = 3）
+        BtnMore.Click += async (_, _) =>
+        {
+            var owner = TopLevel.GetTopLevel(this) as Window;
+            if (owner == null) return;
+            if (ModVersion.SelectedOrDefault() is null)
+            {
+                _right?.ShowHint("还没有可用的游戏版本，请先到下载页安装一个。");
+                return;
+            }
+            var win = new InstanceWindow(() => Build(), asSettings: true);
+            await win.ShowDialog(owner);
+        };
         BtnCancelLaunch.Click += (_, _) => OnCancelLaunch();
 
         Loaded += (_, _) => Build();
@@ -133,11 +146,16 @@ public partial class PageLaunchLeft : UserControl
             LabVersion.Text = "未找到可用的游戏版本";
             BtnLaunch.Text = "下载游戏";
             BtnLaunch.IsEnabledButton = true;
+            BtnVersion.IsEnabledButton = true;
+            // 没版本 / 没选版本时不显示「版本设置」（与 Windows 一致）
+            BtnMore.IsVisible = false;
             return;
         }
         LabVersion.Text = _selected.Id;
         BtnLaunch.Text = "启动游戏";
         BtnLaunch.IsEnabledButton = true;
+        BtnVersion.IsEnabledButton = true;
+        BtnMore.IsVisible = true;
     }
 
     // ===================== PanLogin：对应 PageLoginMs / PageLoginLegacy =====================
@@ -145,8 +163,8 @@ public partial class PageLaunchLeft : UserControl
     private void BuildLoginArea()
     {
         PanLogin.Children.Clear();
-        PanTypeOne.IsVisible = false;
         PanType.IsVisible = true;
+        PanTypeOne.IsVisible = false;
         _comboName = null;
         _hintName = null;
 
@@ -380,11 +398,12 @@ public partial class PageLaunchLeft : UserControl
         BuildLoginArea();
     }
 
-    /// <summary>已登录：头像 + 名字 + 退出。</summary>
+    /// <summary>已登录：头像 + 名字 + 退出。正版/离线切换条保持可见，随时能切回离线（与 Windows 版一致）。</summary>
     private void ShowLoggedIn()
     {
-        PanType.IsVisible = false;
-        PanTypeOne.IsVisible = true;
+        // Windows 版 LoginPageType = 0（正版或离线）时 PanType 始终可见，登录后仍能一键切到离线
+        PanType.IsVisible = true;
+        PanTypeOne.IsVisible = false;
         LabTypeOne.Text = ModSettings.GetString("MsName", "");
         try { PathTypeOne.Data = Geometry.Parse(LogoIcon.Person); } catch { }
 
