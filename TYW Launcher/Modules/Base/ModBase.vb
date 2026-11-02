@@ -7,14 +7,14 @@ Public Module ModBase
 #Region "声明"
 
     '下列版本信息由更新器自动修改
-    Public Const VersionBaseName As String = "1.1.19" '显示用版本名
+    Public Const VersionBaseName As String = "1.1.36" '显示用版本名
     Public Const CommitHash As String = "" 'Commit Hash，由 GitHub Workflow 自动替换
 #If RELEASE Then
-    Public Const VersionCode As Integer = 181 '正式版
+    Public Const VersionCode As Integer = 182 '正式版
 #ElseIf BETA Then
-    Public Const VersionCode As Integer = 187 '内测版
+    Public Const VersionCode As Integer = 190 '内测版
 #Else
-    Public Const VersionCode As Integer = 186 '快照版
+    Public Const VersionCode As Integer = 189 '快照版
 #End If
 
     '版本信息
