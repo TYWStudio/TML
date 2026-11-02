@@ -9,17 +9,17 @@ plugins {
 // 版本通道：-PtywChannel=release|snapshot|beta（与 Windows / Linux 三通道一一对应）
 val tywChannel: String = (project.findProperty("tywChannel") as String?)?.lowercase() ?: "release"
 
-val baseVersionName = "1.1.16"
+val baseVersionName = "1.1.36"
 val channelVersionName = when (tywChannel) {
     "snapshot" -> "$baseVersionName-snapshot"
     "beta" -> "$baseVersionName-beta"
     else -> baseVersionName
 }
-// 正式版版本码 14；快照/内测各自独立从小号起，服务端按通道分别下发
+// 正式版版本码 17；快照/内测各自独立从小号起，服务端按通道分别下发
 val channelVersionCode = when (tywChannel) {
-    "snapshot" -> 3
-    "beta" -> 3
-    else -> 16
+    "snapshot" -> 4
+    "beta" -> 4
+    else -> 17
 }
 val channelKey = when (tywChannel) {
     "snapshot" -> "Snapshot"

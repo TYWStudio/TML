@@ -62,9 +62,9 @@ Public Module ModApp
     Public ReadOnly Property VersionBaseName As String
         Get
             Select Case Channel
-                Case LauncherChannel.Snapshot : Return "1.1.16-snapshot"
-                Case LauncherChannel.Beta : Return "1.1.16-beta"
-                Case Else : Return "1.1.16"
+                Case LauncherChannel.Snapshot : Return "1.1.36-snapshot"
+                Case LauncherChannel.Beta : Return "1.1.36-beta"
+                Case Else : Return "1.1.36"
             End Select
         End Get
     End Property
@@ -76,9 +76,9 @@ Public Module ModApp
     Public ReadOnly Property VersionCode As Integer
         Get
             Select Case Channel
-                Case LauncherChannel.Snapshot : Return 3
-                Case LauncherChannel.Beta : Return 3
-                Case Else : Return 4
+                Case LauncherChannel.Snapshot : Return 4
+                Case LauncherChannel.Beta : Return 4
+                Case Else : Return 5
             End Select
         End Get
     End Property
