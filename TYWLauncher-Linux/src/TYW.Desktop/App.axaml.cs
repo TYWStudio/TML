@@ -15,6 +15,9 @@ public class App : Application
         TYW.ModSettings.Load();
         TYW.Desktop.Views.StaticPage.ApplyMirror();
 
+        // 主题：在创建窗口之前先把配色写进资源，避免启动时先闪一下默认蓝
+        Controls.ThemeEngine.LoadSaved();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow();

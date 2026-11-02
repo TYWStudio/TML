@@ -299,15 +299,126 @@ public static class SettingsPage
 
     private static Control UiCard()
     {
-        var (card, stack) = NewCard("界面");
+        var (card, stack) = NewCard("主题配色");
 
-        stack.Children.Add(Row("配色", Value("TYW 蓝（与 Windows 版一致）")));
+        var nameValue = Value(ThemeEngine.NameOf(ThemeEngine.Current));
+        stack.Children.Add(Row("当前配色", nameValue));
+
+        // ===== 色块网格：15 套预设，与 Windows 版设置 - 个性化 - 主题一一对应 =====
+        var wrap = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        var marks = new Border[ThemeEngine.Presets.Length];
+
+        void RefreshMarks()
+        {
+            for (int i = 0; i < marks.Length; i++)
+            {
+                bool on = i == ThemeEngine.Current;
+                marks[i].BorderBrush = on ? Pcl.Res("ColorBrush1") : Brushes.Transparent;
+                marks[i].BorderThickness = new Thickness(on ? 2 : 1);
+                marks[i].Opacity = on ? 1 : 0.92;
+            }
+        }
+
+        for (int i = 0; i < ThemeEngine.Presets.Length; i++)
+        {
+            int idx = i;
+            var (top, bottom) = ThemeEngine.PreviewOf(i);
+            var sw = new Border
+            {
+                Width = 38,
+                Height = 38,
+                Margin = new Thickness(0, 0, 8, 8),
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                BorderBrush = Brushes.Transparent,
+                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                Background = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                    GradientStops =
+                    {
+                        new GradientStop(top, 0),
+                        new GradientStop(bottom, 1)
+                    }
+                }
+            };
+            sw.PointerPressed += (_, _) =>
+            {
+                ThemeEngine.Apply(idx);
+                nameValue.Text = ThemeEngine.NameOf(idx);
+                RefreshMarks();
+            };
+            marks[i] = sw;
+            ToolTip.SetTip(sw, ThemeEngine.Presets[i].Name);
+            wrap.Children.Add(sw);
+        }
+        stack.Children.Add(wrap);
+        RefreshMarks();
+
+        // ===== 自定义配色（主题 14）：色相 / 饱和度 / 亮度补偿 / 顶栏色相差 =====
+        var custom = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        static PclComboBox N(int v, double w) => new()
+        {
+            IsEditable = true,
+            Width = w,
+            Text = v.ToString(),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var nHue = N(ModSettings.GetInt("UiLauncherHue", 210), 64);
+        var nSat = N(ModSettings.GetInt("UiLauncherSat", 85), 60);
+        var nLight = N(ModSettings.GetInt("UiLauncherLight", 0), 56);
+        var nDelta = N(ModSettings.GetInt("UiLauncherDelta", 0), 56);
+        void SaveCustom()
+        {
+            SaveInt(nHue.Text, "UiLauncherHue", 210);
+            SaveInt(nSat.Text, "UiLauncherSat", 85);
+            SaveInt(nLight.Text, "UiLauncherLight", 0);
+            SaveInt(nDelta.Text, "UiLauncherDelta", 0);
+            ThemeEngine.Apply(ThemeEngine.CustomTheme);
+            nameValue.Text = ThemeEngine.NameOf(ThemeEngine.CustomTheme);
+            RefreshMarks();
+        }
+        nHue.LostFocus += (_, _) => SaveCustom();
+        nSat.LostFocus += (_, _) => SaveCustom();
+        nLight.LostFocus += (_, _) => SaveCustom();
+        nDelta.LostFocus += (_, _) => SaveCustom();
+
+        custom.Children.Add(nHue);
+        custom.Children.Add(nSat);
+        custom.Children.Add(nLight);
+        custom.Children.Add(nDelta);
+        stack.Children.Add(Row("自定义（色相/饱和/亮度/色相差）", custom));
+
+        // ===== 彩色背景（对应 Windows 版 UiBackgroundColorful） =====
+        var bgBtn = new PclButton
+        {
+            Height = 28,
+            Width = 82,
+            Text = ModSettings.GetBool("UiBackgroundColorful", true) ? "已开启" : "已关闭"
+        };
+        bgBtn.Click += (_, _) =>
+        {
+            bool now = !ModSettings.GetBool("UiBackgroundColorful", true);
+            ModSettings.SetValue("UiBackgroundColorful", now);
+            ModSettings.Save();
+            bgBtn.Text = now ? "已开启" : "已关闭";
+            ThemeEngine.RefreshMain();
+        };
+        stack.Children.Add(Row("主题色背景", bgBtn));
+
         stack.Children.Add(Row("语言", Value("简体中文")));
         stack.Children.Add(Row("窗口圆角 / 阴影", Value("跟随系统（Wayland / X11）")));
 
         stack.Children.Add(new TextBlock
         {
-            Text = "深色模式与自定义主题色仍在移植中，目前固定使用 Windows 版的浅色蓝主题。",
+            Text = "配色与 Windows 版完全一致：15 套预设，滑稽彩 / 欧皇彩每次切换随机色相，自定义可填 0-359 的色相。",
             FontSize = 11.5,
             FontFamily = Pcl.FontFamily,
             Foreground = Pcl.Res("ColorBrushGray3"),

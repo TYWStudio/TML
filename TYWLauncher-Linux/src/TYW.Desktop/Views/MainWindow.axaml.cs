@@ -73,6 +73,10 @@ public partial class MainWindow : Window
 
         Opened += (_, _) =>
         {
+            // 主题：绑定窗口后刷新顶栏渐变与主页面背景（对应 Windows 版 ThemeRefreshMain）
+            ThemeEngine.Attach(this);
+            ThemeEngine.RefreshMain();
+
             var navEnv = Environment.GetEnvironmentVariable("TYW_SNAPSHOT_NAV");
             SwitchPage(int.TryParse(navEnv, out var navIdx) ? navIdx : 0);
 
