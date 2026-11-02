@@ -17,14 +17,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # 三个通道各自是一个 buildType，产物落在 app/build/outputs/apk/<通道>/ 下
           - channel: release
-            suffix: ''
+            task: assembleRelease
+            dir: release
+            file: TYWLauncher-android.apk
             output: TYWLauncher-android.apk
           - channel: snapshot
-            suffix: '-snapshot'
+            task: assembleSnapshot
+            dir: snapshot
+            file: TYWLauncher-android-snapshot.apk
             output: TYWLauncher-android-snapshot.apk
           - channel: beta
-            suffix: '-beta'
+            task: assembleDebug
+            dir: debug
+            file: TYWLauncher-android-beta.apk
             output: TYWLauncher-android-beta.apk
 
     steps:
@@ -55,13 +62,13 @@ jobs:
       - name: Build ${{ matrix.channel }}
         working-directory: TYWLauncher-Android
         run: |
-          gradle assembleRelease -PtywChannel=${{ matrix.channel }} --no-daemon --console=plain
+          gradle ${{ matrix.task }} --no-daemon --console=plain
 
       - name: Collect APK
         run: |
           set -e
           mkdir -p dist
-          cp "TYWLauncher-Android/app/build/outputs/apk/release/TYWLauncher-android${{ matrix.suffix }}.apk" \
+          cp "TYWLauncher-Android/app/build/outputs/apk/${{ matrix.dir }}/${{ matrix.file }}" \
              "dist/${{ matrix.output }}"
           cd dist && sha256sum "${{ matrix.output }}" > "${{ matrix.output }}.sha256"
 

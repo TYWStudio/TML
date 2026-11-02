@@ -10,6 +10,8 @@ data class McVersion(
     val type: String,
     val id: String,
     val dir: File,
+    val releaseTime: String = "",
+    val jsonJavaMajor: Int = 0,
 ) {
     val typeDisplay: String
         get() = when (type.lowercase()) {
@@ -19,6 +21,13 @@ data class McVersion(
             "old_alpha" -> "远古 Alpha"
             else -> if (type.isBlank()) "未知" else type
         }
+
+    /** 这个版本必须要的 Java 大版本（JSON 里写了的直接用，没写按版本号推）。 */
+    val requiredJava: Int
+        get() = JavaRuntime.requiredFor(id, releaseTime, jsonJavaMajor)
+
+    val javaRequirement: String
+        get() = JavaRuntime.requirementText(requiredJava)
 }
 
 /**
@@ -42,13 +51,17 @@ object Minecraft {
             if (!json.isFile) return@forEach
             var id = vdir.name
             var type = ""
+            var releaseTime = ""
+            var javaMajor = 0
             try {
                 val obj = JSONObject(json.readText())
                 id = obj.optString("id", vdir.name)
                 type = obj.optString("type", "")
+                releaseTime = obj.optString("releaseTime", "")
+                javaMajor = obj.optJSONObject("javaVersion")?.optInt("majorVersion", 0) ?: 0
             } catch (_: Exception) {
             }
-            list.add(McVersion(vdir.name, type, id, vdir))
+            list.add(McVersion(vdir.name, type, id, vdir, releaseTime, javaMajor))
         }
         return list.sortedByDescending { it.dir.lastModified() }
     }

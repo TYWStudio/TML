@@ -80,17 +80,23 @@ same cards / rows / buttons, same palette engine), with the same server protocol
 - **Device code**: identical format to Windows — `XXXX-XXXX-XXXX-XXXX`, derived from a stable device fingerprint
   (MD5 of `ANDROID_ID|manufacturer|model|device|fingerprint`, first 16 hex chars, uppercased). Both the device code
   and the authorisation code have a one-tap **Copy** button, and tapping the value copies it too.
-- **Java auto-provisioning**: scans the launcher's own runtime directory and common system paths; if nothing is
-  found it downloads the runtime listed as `Link.JavaDownloadsAndroid` in `config.json` (falling back to
-  `java-android-<arch>.zip` on the server), extracts `.zip` / `.tar.gz`, marks `bin/java` executable and stores the
-  path. One button — *自动补全 Java*.
+- **Java management (list)**: Settings → Java 运行环境 → 管理 Java opens a dedicated page listing Java 8 / 11 / 16 /
+  17 / 21 / 25. Every version can be downloaded or installed from a local archive (`zip` / `tar.gz`); installed
+  runtimes can be set as default or removed. The auto-provisioning button first checks the requirement of the
+  selected game version — `javaVersion.majorVersion` from the version JSON when present, otherwise derived from the
+  version number (1.20.5+ → 21, 1.18–1.20.4 → 17, 1.17.x → 16, older → 8) — and only downloads when nothing suitable
+  is installed. A mismatch is called out in red on the launch page. Sources come from `Link.JavaAndroid` in
+  `config.json`, falling back to `java-android-<major>-<arch>.zip` / `java-android-<arch>.zip` on the server.
 - **Touch controls**: layout data model, default keymap and editing behaviour follow **Fold Craft Launcher (FCL)** —
   movement joystick, view area, attack / use, jump / sneak / sprint, inventory, chat, drop, swap-offhand,
   perspective toggle, pause menu and the 9-slot hotbar. Positions are stored as screen-relative percentages and can
   be exported as JSON.
-- **Channels**: three separately built APKs (`TYWLauncher-android.apk`, `-snapshot`, `-beta`) served from the same
-  `config.json` → `Android.Channels.<channel>.{VersionCode,File}`, with the beta APK protected by device code + beta
-  key on the server.
+- **Channels**: three separately built APKs, one build type per channel, landing in
+  `app/build/outputs/apk/release|snapshot|debug/` (`TYWLauncher-android.apk`, `-snapshot`, `-beta`) and served from the
+  same `config.json` → `Android.Channels.<channel>.{VersionCode,File}`, with the beta APK protected by device code +
+  beta key on the server.
+- **Animations**: page switches slide horizontally with a cross-fade, sub-pages (Java manager, touch editor) push in
+  from the side, buttons scale slightly while pressed, nav pills and progress bars animate their state.
 
 Java Edition only — no Bedrock edition is offered on any platform.
 
@@ -108,7 +114,7 @@ msbuild "TYW Launcher.sln" /restore /p:Configuration=Release /m
 
 **Linux** — `dotnet publish TYWLauncher-Linux/src/TYW.Desktop/TYW.Desktop.csproj -c Release -r linux-x64 -p:TYWChannel=Release`
 
-**Android** — `./gradlew assembleRelease -PtywChannel=release|snapshot|beta`
+**Android** — `./gradlew assembleRelease` / `assembleSnapshot` / `assembleDebug` (one build type per channel)
 
 Or just push a tag (`v*`) — **GitHub Actions builds all three platforms automatically and attaches every artefact
 (Windows exe, Linux tar.gz ×3, Android APK ×3) to a GitHub Release**.

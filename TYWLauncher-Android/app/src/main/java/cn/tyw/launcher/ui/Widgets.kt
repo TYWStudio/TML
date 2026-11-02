@@ -1,21 +1,35 @@
 package cn.tyw.launcher.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.tyw.launcher.R
 import cn.tyw.launcher.core.LocalPalette
 
 /** 页面标识，顺序与 Windows 版标题栏的 启动/下载/联机/设置/更多 一致。 */
@@ -49,7 +63,12 @@ fun TywTopBar(current: TywPage, onSelect: (TywPage) -> Unit) {
                     .background(Color(0x33FFFFFF)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("T", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Image(
+                    painter = painterResource(R.drawable.ic_logo),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             Spacer(Modifier.width(8.dp))
             Text(
@@ -68,17 +87,28 @@ fun TywTopBar(current: TywPage, onSelect: (TywPage) -> Unit) {
         ) {
             TywPage.entries.forEach { page ->
                 val active = page == current
+                // 选中态的胶囊与文字颜色都做过渡，切页时不会硬跳
+                val pill by animateColorAsState(
+                    targetValue = if (active) Color(0x33FFFFFF) else Color.Transparent,
+                    animationSpec = tween(180),
+                    label = "navPill"
+                )
+                val tint by animateColorAsState(
+                    targetValue = if (active) Color.White else Color(0xCCFFFFFF),
+                    animationSpec = tween(180),
+                    label = "navTint"
+                )
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
                         .clip(RoundedCornerShape(13.dp))
-                        .background(if (active) Color(0x33FFFFFF) else Color.Transparent)
+                        .background(pill)
                         .clickable { onSelect(page) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = page.title,
-                        color = if (active) Color.White else Color(0xCCFFFFFF),
+                        color = tint,
                         fontSize = 13.sp,
                         fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
                     )
@@ -154,7 +184,7 @@ fun SettingRow(
     }
 }
 
-/** Windows 版同款按钮：圆角 3、1px 描边，高亮为 C3 描边 + C7 底。 */
+/** Windows 版同款按钮：圆角 3、1px 描边，高亮为 C3 描边 + C7 底；按下有轻微缩放动画。 */
 @Composable
 fun TywButton(
     text: String,
@@ -165,13 +195,28 @@ fun TywButton(
 ) {
     val p = LocalPalette.current
     val border = if (highlight) p.c3 else p.c1
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
+        label = "btnScale"
+    )
     Box(
         modifier = modifier
             .height(32.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(3.dp))
             .background(if (highlight) p.c7 else Color(0xBBFFFFFF))
             .border(1.dp, if (enabled) border else Color(0xFFCCCCCC), RoundedCornerShape(3.dp))
-            .clickable(enabled = enabled) { onClick() }
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                enabled = enabled,
+            ) { onClick() }
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

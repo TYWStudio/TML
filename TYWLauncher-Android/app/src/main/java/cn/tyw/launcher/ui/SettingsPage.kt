@@ -33,6 +33,7 @@ fun SettingsPage(
     onThemeChange: (Int) -> Unit,
     onColorfulChange: (Boolean) -> Unit,
     onOpenTouchLayout: () -> Unit,
+    onOpenJavaPage: () -> Unit,
 ) {
     val context = LocalContext.current
     val p = LocalPalette.current
@@ -158,41 +159,25 @@ fun SettingsPage(
             HintText("切换会下载对应通道的 APK 并交给系统安装器，数据不受影响。内测版需要有效内测码，启动时会联网校验。")
         }
 
-        // ===== Java 运行环境（对应 Windows 设置-启动设置里的 Java） =====
+        // ===== Java 运行环境（对应 Windows 设置-启动设置里的 Java 列表） =====
         TywCard("Java 运行环境") {
-            var javaPath by remember { mutableStateOf(JavaRuntime.detect() ?: "") }
-            var javaBusy by remember { mutableStateOf(false) }
-            var javaProgress by remember { mutableFloatStateOf(0f) }
-            var javaStatus by remember { mutableStateOf("") }
-            SettingRow("Java 路径") {
+            val installed = JavaRuntime.scan()
+            val current = JavaRuntime.pick()
+            SettingRow("已安装的运行时") { ValueText("${installed.size} 个") }
+            SettingRow("当前使用") {
                 Text(
-                    javaPath.ifEmpty { "未检测到" },
-                    fontSize = 11.5.sp,
-                    color = if (javaPath.isEmpty()) p.textHint else p.textSub
+                    current?.display ?: "未检测到",
+                    fontSize = 12.5.sp,
+                    color = if (current == null) p.textHint else p.c2
                 )
             }
-            if (javaBusy) {
-                LinearProgressIndicator(progress = { javaProgress }, modifier = Modifier.fillMaxWidth())
-                Text("${javaStatus} ${(javaProgress * 100).toInt()}%", fontSize = 11.sp, color = p.textHint)
+            if (current != null) {
+                Text(current.path, fontSize = 11.sp, color = p.textHint, lineHeight = 15.sp)
             }
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TywButton("自动补全 Java", highlight = javaPath.isEmpty(), enabled = !javaBusy) {
-                    javaBusy = true
-                    javaStatus = "准备中…"
-                    scope.launch {
-                        val r = JavaRuntime.ensure(
-                            progress = { javaProgress = it.toFloat() },
-                            status = { javaStatus = it }
-                        )
-                        javaBusy = false
-                        javaPath = r.path
-                        if (!r.ok) javaStatus = r.message
-                        Toast.makeText(context, if (r.ok) "Java 已就绪" else r.message, Toast.LENGTH_LONG).show()
-                    }
-                }
-                TywButton("重新检测", enabled = !javaBusy) { javaPath = JavaRuntime.detect() ?: "" }
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TywButton("管理 Java", highlight = true) { onOpenJavaPage() }
             }
-            HintText("先扫启动器自带的运行时，没有就按服务端下发的地址下载，解压到 files/java 并自动写回设置。")
+            HintText("列表覆盖 Java 8 / 11 / 16 / 17 / 21 / 25，可按游戏版本补全，也可单独下载或导入本地 JRE 包。")
         }
 
         // ===== 触控布局 =====

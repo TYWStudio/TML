@@ -3,6 +3,8 @@ package cn.tyw.launcher.ui
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +35,7 @@ import kotlinx.coroutines.launch
  * 左栏是账户 + 版本选择，右栏是启动按钮与游戏设置；窄屏时上下堆叠。
  */
 @Composable
-fun LaunchPage(onOpenTouchLayout: () -> Unit) {
+fun LaunchPage(onOpenTouchLayout: () -> Unit, onOpenJavaPage: () -> Unit) {
     val context = LocalContext.current
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
@@ -49,6 +52,9 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
     var showVersionSettings by remember { mutableStateOf(false) }
     var showLaunchHelp by remember { mutableStateOf(false) }
     var maxMemory by remember { mutableIntStateOf(Settings.getInt("LaunchRam", 2048)) }
+    var appeared by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { appeared = true }
 
     // 正版登录
     var loginOpen by remember { mutableStateOf(false) }
@@ -59,7 +65,7 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
     var cancelLogin by remember { mutableStateOf(false) }
 
     // Java
-    var javaPath by remember { mutableStateOf(JavaRuntime.detect() ?: "") }
+    var javaPath by remember { mutableStateOf(JavaRuntime.pick(selected?.requiredJava ?: 0)?.path ?: "") }
     var javaStatus by remember { mutableStateOf("") }
     var javaProgress by remember { mutableFloatStateOf(0f) }
     var javaBusy by remember { mutableStateOf(false) }
@@ -163,34 +169,56 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
     }
 
     val javaCard: @Composable () -> Unit = {
+        val required = selected?.requiredJava ?: 0
+        val currentMajor = if (javaPath.isNotEmpty()) JavaRuntime.majorOf(javaPath) else 0
+        val javaProgressAnim by animateFloatAsState(javaProgress, tween(220), label = "javaBar")
         TywCard("Java 运行环境") {
+            SettingRow("版本要求") {
+                Text(
+                    if (required > 0) JavaRuntime.requirementText(required) else "未选择版本",
+                    fontSize = 12.5.sp,
+                    color = if (required > 0) p.c2 else p.textHint
+                )
+            }
             SettingRow("当前 Java") {
                 Text(
-                    if (javaPath.isEmpty()) "未检测到" else javaPath.substringAfterLast('/')
-                        .ifEmpty { javaPath },
+                    if (javaPath.isEmpty()) "未检测到"
+                    else JavaRuntime.versionOf(javaPath).ifEmpty { javaPath.substringAfterLast('/') },
                     fontSize = 12.5.sp,
                     color = if (javaPath.isEmpty()) p.textHint else p.c2
                 )
             }
-            if (javaPath.isNotEmpty()) {
-                HintText(JavaRuntime.versionOf(javaPath).ifEmpty { javaPath })
+            // 版本要求与已装 Java 对不上时直接标出来，避免装了个 Java 8 却去启动 1.21
+            if (required > 0 && javaPath.isNotEmpty() && currentMajor in 1 until required) {
+                Text(
+                    "当前 Java $currentMajor 低于该版本要求的 ${JavaRuntime.requirementText(required)}，启动会失败。",
+                    fontSize = 11.5.sp,
+                    color = Color(0xFFD9534F),
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
             if (javaBusy) {
                 LinearProgressIndicator(
-                    progress = { javaProgress },
+                    progress = { javaProgressAnim },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
                 )
-                if (javaStatus.isNotEmpty()) HintText(javaStatus)
+                if (javaStatus.isNotEmpty()) HintText("$javaStatus ${(javaProgress * 100).toInt()}%")
             }
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                TywButton("自动补全 Java", highlight = javaPath.isEmpty(), enabled = !javaBusy) {
+                TywButton(
+                    if (required > 0) "补全 ${JavaRuntime.requirementText(required)}" else "自动补全 Java",
+                    highlight = javaPath.isEmpty(),
+                    enabled = !javaBusy
+                ) {
                     javaBusy = true
                     javaProgress = 0f
                     javaStatus = "准备中…"
                     scope.launch {
                         val r = JavaRuntime.ensure(
+                            required = required,
                             progress = { javaProgress = it.toFloat() },
                             status = { javaStatus = it }
                         )
@@ -205,12 +233,9 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                TywButton("重新检测", enabled = !javaBusy) {
-                    javaPath = JavaRuntime.detect() ?: ""
-                    javaStatus = if (javaPath.isEmpty()) "没有找到可用的 Java" else "已找到"
-                }
+                TywButton("管理 Java") { onOpenJavaPage() }
             }
-            HintText("内置源没配时会去服务端 www 找 java-android-<架构>.zip，也可以把 JRE 包放进启动器目录。")
+            HintText("补全会先复用已装的、满足版本要求的运行时，没有才下载；也可以在「管理 Java」里装 Java 8/11/16/17/21/25。")
         }
     }
 
@@ -233,7 +258,18 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // 进场动画：整页淡入 + 轻微上移，和 Windows 版切到启动页的效果一致
+    val enterAlpha by animateFloatAsState(if (appeared) 1f else 0f, tween(260), label = "enterAlpha")
+    val enterShift by animateFloatAsState(if (appeared) 0f else 24f, tween(260), label = "enterShift")
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                alpha = enterAlpha
+                translationY = enterShift
+            }
+    ) {
         val wide = maxWidth > 620.dp
         if (wide) {
             Row(
@@ -260,7 +296,6 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
                     launchButton()
                     javaCard()
                     TouchCard(onOpenTouchLayout)
-                    serverCard()
                 }
             }
         } else {
@@ -276,7 +311,6 @@ fun LaunchPage(onOpenTouchLayout: () -> Unit) {
                 launchButton()
                 javaCard()
                 TouchCard(onOpenTouchLayout)
-                serverCard()
             }
         }
     }
@@ -475,23 +509,5 @@ private fun TouchCard(onOpen: () -> Unit) {
             }
             TywButton("编辑布局", highlight = true, onClick = onOpen)
         }
-    }
-}
-
-@Composable
-private fun serverCard() {
-    val p = LocalPalette.current
-    TywCard("服务端") {
-        SettingRow("连接状态") {
-            Text(
-                if (Server.online) "已连接" else "离线（不影响本地启动）",
-                fontSize = 12.5.sp,
-                color = if (Server.online) p.c2 else p.textHint
-            )
-        }
-        SettingRow("服务器") { ValueText(AppInfo.SERVER_ADDRESS.removePrefix("http://").trimEnd('/')) }
-        SettingRow("版本通道") { ValueText("${AppInfo.channel.display} · ${AppInfo.versionName}") }
-        CopyRow("设备码", Settings.deviceCode)
-        HintText("公告、更新与内测校验都走这台服务器，与 Windows / Linux 版是同一套接口。")
     }
 }
