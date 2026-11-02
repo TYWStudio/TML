@@ -85,8 +85,13 @@ same cards / rows / buttons, same palette engine), with the same server protocol
   runtimes can be set as default or removed. The auto-provisioning button first checks the requirement of the
   selected game version — `javaVersion.majorVersion` from the version JSON when present, otherwise derived from the
   version number (1.20.5+ → 21, 1.18–1.20.4 → 17, 1.17.x → 16, older → 8) — and only downloads when nothing suitable
-  is installed. A mismatch is called out in red on the launch page. Sources come from `Link.JavaAndroid` in
-  `config.json`, falling back to `java-android-<major>-<arch>.zip` / `java-android-<arch>.zip` on the server.
+  is installed. A mismatch is called out in red on the launch page. Downloads go **straight to the public internet,
+  nothing is hosted on our server**: the launcher resolves the newest `jre<major>-<arch>-<date>-release.tar.xz`
+  (Java 8 / 17 / 21 / 25, picked by the device ABI) from GitHub Releases — the same runtime family FCL and
+  PojavLauncher use — falls back to a pinned release tag, then retries through public mirrors if GitHub is unreachable.
+  Azul Zulu is deliberately not used: it ships Linux (glibc) / Alpine (musl) / Windows / macOS targets only and has
+  **no Android (bionic) build**, so a desktop JDK cannot execute on a phone. Java 11 / 16 have no Android build either
+  and are import-only. `Link.JavaAndroid` in `config.json` still works as an optional extra source.
 - **Touch controls**: layout data model, default keymap and editing behaviour follow **Fold Craft Launcher (FCL)** —
   movement joystick, view area, attack / use, jump / sneak / sprint, inventory, chat, drop, swap-offhand,
   perspective toggle, pause menu and the 9-slot hotbar. Positions are stored as screen-relative percentages and can

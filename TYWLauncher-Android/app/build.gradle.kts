@@ -7,7 +7,7 @@ plugins {
 }
 
 // 版本基线。三通道共用同一个 versionName，通道后缀由各自的 buildType 追加。
-val baseVersionName = "1.1.36"
+val baseVersionName = "1.1.37"
 
 android {
     namespace = "cn.tyw.launcher"
@@ -21,7 +21,7 @@ android {
         // 三个通道共用同一个 applicationId，APK 的 versionCode 也保持同一个值：
         // 这样从正式版切到快照版（版本码更小）时不会被系统判成降级而拒绝安装，
         // 通道自身的版本码由 BuildConfig.VERSION_CODE_CN 提供，只用于和服务端比对更新。
-        versionCode = 36
+        versionCode = 37
         versionName = baseVersionName
 
         buildConfigField("String", "SERVER_ADDRESS", "\"http://Launcher.mc.tywmc.cn:17403/\"")
@@ -49,7 +49,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "CHANNEL", "\"Release\"")
             buildConfigField("String", "VERSION_NAME_CN", "\"$baseVersionName\"")
-            buildConfigField("int", "VERSION_CODE_CN", "18")
+            buildConfigField("int", "VERSION_CODE_CN", "19")
         }
 
         // ===== 快照版：build/outputs/apk/snapshot/ =====
@@ -61,7 +61,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "CHANNEL", "\"Snapshot\"")
             buildConfigField("String", "VERSION_NAME_CN", "\"$baseVersionName-snapshot\"")
-            buildConfigField("int", "VERSION_CODE_CN", "5")
+            buildConfigField("int", "VERSION_CODE_CN", "6")
         }
 
         // ===== 内测版：build/outputs/apk/debug/ =====
@@ -74,7 +74,7 @@ android {
             applicationIdSuffix = ""
             buildConfigField("String", "CHANNEL", "\"Beta\"")
             buildConfigField("String", "VERSION_NAME_CN", "\"$baseVersionName-beta\"")
-            buildConfigField("int", "VERSION_CODE_CN", "5")
+            buildConfigField("int", "VERSION_CODE_CN", "6")
         }
     }
 
@@ -107,4 +107,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Android 原生 JRE 的官方发布是 .tar.xz，需要 XZ 解压（纯 Java 实现）
+    implementation("org.tukaani:xz:1.10")
 }

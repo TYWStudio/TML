@@ -46,6 +46,8 @@ fun JavaPage(
 
     var runtimes by remember { mutableStateOf(JavaRuntime.scan()) }
     var current by remember { mutableStateOf(JavaRuntime.pick(requiredMajor)) }
+    var catalog by remember { mutableStateOf<List<JavaRuntime.Candidate>>(emptyList()) }
+    var loadingCatalog by remember { mutableStateOf(true) }
     var busyMajor by remember { mutableIntStateOf(0) }
     var progress by remember { mutableFloatStateOf(0f) }
     var status by remember { mutableStateOf("") }
@@ -53,6 +55,11 @@ fun JavaPage(
     var appeared by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { appeared = true }
+
+    LaunchedEffect(Unit) {
+        catalog = JavaRuntime.catalog()
+        loadingCatalog = false
+    }
 
     fun refresh() {
         runtimes = JavaRuntime.scan()
@@ -181,7 +188,7 @@ fun JavaPage(
                     if (requiredMajor > 0)
                         "补全会优先复用已有的 $needText，不会重复下载其他版本。"
                     else
-                        "补全会先复用已装运行时，没有才去服务端下载。"
+                        "补全会先复用已装运行时，没有才联网下载对应的 Android 原生运行时。"
                 )
             }
 
@@ -244,7 +251,12 @@ fun JavaPage(
 
             // ===== 可安装版本列表 =====
             TywCard("可安装的 Java 版本") {
-                JavaRuntime.candidates().forEach { c ->
+                if (loadingCatalog) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("正在查询在线下载源…", fontSize = 12.sp, color = p.textHint)
+                    }
+                }
+                catalog.forEach { c ->
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -254,7 +266,12 @@ fun JavaPage(
                         Column(Modifier.weight(1f)) {
                             Text(c.label, fontSize = 13.sp, color = p.c1, fontWeight = FontWeight.Medium)
                             Text(
-                                if (c.isInstalled) "已安装：${c.installed?.display}" else "未安装",
+                                when {
+                                    c.isInstalled -> "已安装：${c.installed?.display}"
+                                    c.available -> listOf(c.source, c.sizeText).filter { it.isNotEmpty() }
+                                        .joinToString(" · ")
+                                    else -> "无 Android 原生构建，请用「导入安装包」"
+                                },
                                 fontSize = 11.sp,
                                 color = if (c.isInstalled) p.c2 else p.textHint
                             )
@@ -271,13 +288,20 @@ fun JavaPage(
                                 refresh()
                             }
 
-                            else -> TywButton("下载", highlight = true, enabled = !busy) { install(c.major) }
+                            c.available -> TywButton("下载", highlight = true, enabled = !busy) { install(c.major) }
+
+                            else -> TywButton("下载", enabled = false) {}
                         }
                     }
                 }
                 HintText(
-                    "列表覆盖 Java 8 / 11 / 16 / 17 / 21 / 25，下载地址由服务端 config.json 的 Link.JavaAndroid 下发；" +
-                        "服务端没配时按 www/java-android-<大版本>-<架构>.zip 找，也可以用「导入安装包」装本地 zip / tar.gz。"
+                    "下载直连公网：与 FCL / Pojav 同源的 Android 原生运行时（按设备架构取 tar.xz，约 25~29 MB），" +
+                        "GitHub 直链不通会自动换镜像重试，装完自动解压到启动器目录并设为默认。"
+                )
+                HintText(
+                    "Azul 的 Zulu 只有 Linux / Alpine / Windows / macOS 构建，没有 Android（bionic）版本，" +
+                        "桌面 JDK 在手机上无法执行，所以这里用的是 Android 原生构建；" +
+                        "Java 11 / 16 没有对应构建，需要的话用「导入安装包」。"
                 )
             }
 

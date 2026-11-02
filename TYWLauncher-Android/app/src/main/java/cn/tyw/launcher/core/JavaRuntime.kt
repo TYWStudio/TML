@@ -5,6 +5,7 @@ import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -21,11 +22,26 @@ import java.util.zip.ZipInputStream
  * · [requiredFor] 按 Minecraft 版本 JSON 的 javaVersion.majorVersion（没有就按版本号 / 发布时间推）算出需要的 Java；
  * · [ensure] 一键补全时会先看有没有满足该版本要求的运行时，没有才去下载，避免装了个 Java 8 却启动 1.21。
  *
- * 下载源走服务端 config.json 的 Link.JavaAndroid（对象数组，带 major）或旧的 Link.JavaDownloadsAndroid
- * （字符串数组，支持 {arch} / {major} 占位）；都没有时按 www/java-android-<major>-<arch>.zip 约定找。
+ * 下载源全部直连公网，不依赖服务端托管：与 FCL / Pojav 同源的 Android 原生 JRE（multiarch zip，
+ * Java 8 / 17 / 21 / 25 各一份），查询 GitHub Releases 拿到带版本号的最新直链，查询失败时退回固定 tag 的
+ * 直链；GitHub 直链不通时自动换公共镜像重试。服务端 config.json 的 Link.JavaAndroid 仍然支持，但只作为
+ * 可选的补充源（默认没有配置就不参与）。
+ *
+ * 为什么不直接下 Azul Zulu：Azul 只发布 Linux(glibc) / Alpine(musl) / Windows / macOS 目标，没有
+ * Android(bionic) 构建，`os=android` 查询会被忽略并返回 Linux 包，解压后 bin/java 依赖 ld-linux 无法执行。
+ * Windows / Linux 版走 Mojang 官方 java-runtime，那边换成 Azul 才有意义。
  */
 object JavaRuntime {
     private lateinit var app: Context
+
+    /** Android 原生 JRE 的来源：与 FCL / Pojav 同源的按架构构建（tar.xz）。 */
+    private const val ANDROID_JRE_REPO = "SouhardyaMaybe/EclipseJRE"
+    private const val ANDROID_JRE_TAG = "jres-v1.0.0"
+    private const val ANDROID_JRE_FALLBACK_DATE = "20261009"
+    private val ANDROID_MAJORS = listOf(8, 17, 21, 25)
+
+    /** GitHub 直链不通时的公共镜像前缀，按顺序重试。 */
+    private val MIRRORS = listOf("https://ghfast.top/", "https://ghproxy.net/")
 
     fun init(context: Context) {
         app = context.applicationContext
@@ -51,16 +67,24 @@ object JavaRuntime {
     data class Candidate(
         val major: Int,
         val label: String,
-        val url: String,
+        val source: String,
+        val size: Long,
+        val available: Boolean,
         val installed: Runtime?,
     ) {
         val isInstalled: Boolean get() = installed != null
+        val sizeText: String get() = if (size > 0) "${size / 1048576} MB" else ""
     }
+
+    /** 一个可下载的运行时包：直链 + 展示名 + 体积（体积未知时为 0）。 */
+    data class Package(val label: String, val url: String, val size: Long = 0)
 
     // 版本号读取结果缓存，避免列表滚动时反复起进程
     private val versionCache = HashMap<String, String>()
-    private var archiveUrls: List<Triple<Int, String, String>>? = null
-    private var archiveUrlsAt = 0L
+    private val packageCache = HashMap<String, Package>()
+    private var catalogFromApi = false
+    private var catalogLoaded = false
+    private var catalogAt = 0L
 
     // ================= 扫描 =================
 
@@ -154,24 +178,30 @@ object JavaRuntime {
 
     // ================= 列表 =================
 
-    /** Java 8/11/16/17/21/25 全量列表，带上已装状态与下载地址。 */
-    fun candidates(): List<Candidate> {
+    /** Java 8/11/16/17/21/25 全量列表，带上已装状态与在线下载信息。会联网查一次下载源（缓存 6 小时）。 */
+    suspend fun catalog(): List<Candidate> = withContext(Dispatchers.IO) {
+        ensureCatalog()
         val installed = scan()
-        return majors.map { major ->
+        majors.map { major ->
+            val pkg = onlinePackage(major)
             Candidate(
                 major = major,
-                label = "Java $major" + when (major) {
-                    8 -> "（1.16.5 及更早）"
-                    16 -> "（1.17.x）"
-                    17 -> "（1.18 ~ 1.20.4）"
-                    21 -> "（1.20.5 及更新）"
-                    25 -> "（实验性）"
-                    else -> ""
-                },
-                url = urlsFor(major).firstOrNull().orEmpty(),
+                label = labelOf(major),
+                source = pkg?.label ?: "",
+                size = pkg?.size ?: 0L,
+                available = pkg != null,
                 installed = installed.firstOrNull { it.major == major },
             )
         }
+    }
+
+    private fun labelOf(major: Int): String = "Java $major" + when (major) {
+        8 -> "（1.16.5 及更早）"
+        16 -> "（1.17.x）"
+        17 -> "（1.18 ~ 1.20.4）"
+        21 -> "（1.20.5 及更新）"
+        25 -> "（实验性）"
+        else -> ""
     }
 
     // ================= 安装 =================
@@ -182,25 +212,26 @@ object JavaRuntime {
         progress: (Double) -> Unit = {},
         status: (String) -> Unit = {},
     ): Result = withContext(Dispatchers.IO) {
-        val urls = urlsFor(major)
-        if (urls.isEmpty()) {
+        val packages = resolve(major)
+        if (packages.isEmpty()) {
             return@withContext Result(
                 false, "",
-                "服务端还没有配置 Java $major 的 Android 运行时包，可以用「导入安装包」手动安装 zip / tar.gz"
+                "Java $major 没有 Android 原生构建，请用「导入安装包」装自己的 JRE"
             )
         }
         var lastError = "自动补全失败"
-        for ((index, url) in urls.withIndex()) {
-            status("下载 Java $major（源 ${index + 1}/${urls.size}）…")
+        for ((index, pkg) in packages.withIndex()) {
+            val sizeText = if (pkg.size > 0) "，约 ${pkg.size / 1048576} MB" else ""
+            status("正在下载 ${pkg.label}$sizeText…")
             val archive = File(app.cacheDir, "java-$major-$index.pkg")
             archive.delete()
-            if (!Server.download(url, archive) { progress(it * 0.85) }) {
-                lastError = "下载失败：$url"
+            if (!Server.download(pkg.url, archive) { progress(it * 0.9) }) {
+                lastError = "下载失败：${pkg.label}"
                 archive.delete()
                 continue
             }
             try {
-                status("解压 Java $major…")
+                status("解压 ${pkg.label}…")
                 val dir = File(javaRoot, "jre-$major")
                 dir.deleteRecursively()
                 dir.mkdirs()
@@ -208,7 +239,13 @@ object JavaRuntime {
                 progress(0.95)
                 val bin = findJava(dir)
                 if (bin == null) {
-                    lastError = "解压后没有找到 bin/java，包可能不是 Android 版本的 JRE"
+                    lastError = "解压后没有找到 bin/java，包可能不是可用的运行时"
+                    dir.deleteRecursively()
+                    archive.delete()
+                    continue
+                }
+                if (!hasVmLibrary(dir)) {
+                    lastError = "这个包里没有 libjvm.so，不是 Android 原生运行时"
                     dir.deleteRecursively()
                     archive.delete()
                     continue
@@ -219,7 +256,7 @@ object JavaRuntime {
                 progress(1.0)
                 status("Java $major 已就绪")
                 archive.delete()
-                return@withContext Result(true, bin.absolutePath, "Java $major 安装完成")
+                return@withContext Result(true, bin.absolutePath, "Java $major 安装完成（${pkg.label}）")
             } catch (e: Exception) {
                 lastError = "解压失败：${e.message}"
                 archive.delete()
@@ -302,7 +339,11 @@ object JavaRuntime {
             return@withContext Result(true, it.path, "已找到 Java")
         } }
 
-        val major = if (required > 0) required else 17
+        val major = when {
+            required == 16 -> 17  // 1.17 要 Java 16，但没有 Android 原生 16，17 可以直接跑
+            required > 0 -> required
+            else -> 17
+        }
         status("正在安装 Java $major…")
         install(major, progress, status)
     }
@@ -345,55 +386,106 @@ object JavaRuntime {
 
     // ================= 下载源 =================
 
-    private fun urlsFor(major: Int): List<String> {
-        val all = archiveSources()
-        val matched = all.filter { it.first == major || it.first == 0 }.map { it.third }
-        val fallback = listOf(
-            AppInfo.SERVER_ADDRESS.trimEnd('/') + "/java-android-$major-$arch.zip",
-            AppInfo.SERVER_ADDRESS.trimEnd('/') + "/java-android-$arch.zip",
-        )
-        return (matched + fallback).distinct()
+    /** 一次安装要尝试的所有直链：官方直链 → 镜像 → 服务端自定义补充源。 */
+    private fun resolve(major: Int): List<Package> {
+        val out = mutableListOf<Package>()
+        onlinePackage(major)?.let { pkg ->
+            out += pkg
+            MIRRORS.forEach { mirror -> out += Package(pkg.label, mirror + pkg.url, pkg.size) }
+        }
+        serverPackages(major).forEach { out += it }
+        return out
     }
 
-    /** 解析服务端配置，返回 (major, 名字, 地址)；major = 0 表示不区分版本。 */
-    private fun archiveSources(): List<Triple<Int, String, String>> {
-        val cached = archiveUrls
-        if (cached != null && System.currentTimeMillis() - archiveUrlsAt < 300_000) return cached
-        val out = mutableListOf<Triple<Int, String, String>>()
+    /** 在线包：优先用 GitHub Releases 里带日期的最新直链，查不到就用固定 tag 的直链兜底。 */
+    private fun onlinePackage(major: Int): Package? {
+        ensureCatalog()
+        packageCache["$major-$arch"]?.let { return it }
+        if (catalogFromApi) return null
+        if (major !in ANDROID_MAJORS) return null
+        return Package(archLabel(major), androidJreUrl(major, ANDROID_JRE_FALLBACK_DATE))
+    }
+
+    private fun archLabel(major: Int): String = "Android JRE $major（$arch）"
+
+    private fun androidJreUrl(major: Int, date: String): String =
+        "https://github.com/$ANDROID_JRE_REPO/releases/download/$ANDROID_JRE_TAG/jre$major-$arch-$date-release.tar.xz"
+
+    /**
+     * 查 GitHub 上 Android 原生 JRE 的最新发布，按 (大版本, 架构) 记住直链与体积。
+     * 6 小时内只查一次；查询失败时退回固定 tag 的直链。
+     */
+    private fun ensureCatalog(force: Boolean = false) {
+        val fresh = System.currentTimeMillis() - catalogAt < 6 * 3600_000L
+        if (!force && catalogLoaded && fresh) return
+        catalogLoaded = true
         try {
-            val raw = Server.get("config.json")
+            val raw = Server.get(
+                "https://api.github.com/repos/$ANDROID_JRE_REPO/releases/latest", 12000
+            ) ?: Server.get(
+                "https://api.github.com/repos/$ANDROID_JRE_REPO/releases/tags/$ANDROID_JRE_TAG", 12000
+            )
             if (raw != null) {
-                val link = JSONObject(raw).optJSONObject("Link")
-                link?.optJSONArray("JavaAndroid")?.let { arr ->
-                    for (i in 0 until arr.length()) {
-                        val o = arr.optJSONObject(i) ?: continue
-                        val url = o.optString("url").replace("{arch}", arch)
+                val assets = JSONObject(raw).optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val a = assets.optJSONObject(i) ?: continue
+                        val m = Regex("^jre(\\d+)-(arm64|arm|x86_64|x86)-(\\d{8})-release\\.tar\\.xz$")
+                            .find(a.optString("name")) ?: continue
+                        val major = m.groupValues[1].toInt()
+                        val targetArch = m.groupValues[2]
+                        val url = a.optString("browser_download_url")
                         if (url.isEmpty()) continue
-                        out += Triple(o.optInt("major", 0), o.optString("name", ""), url)
+                        packageCache["$major-$targetArch"] = Package(
+                            "Android JRE $major（$targetArch）", url, a.optLong("size", 0L)
+                        )
                     }
-                }
-                link?.optJSONArray("JavaDownloadsAndroid")?.let { arr ->
-                    for (i in 0 until arr.length()) {
-                        val url = arr.optString(i).replace("{arch}", arch).replace("{major}", "")
-                        if (url.isNotEmpty()) out += Triple(0, "", url)
-                    }
+                    catalogFromApi = packageCache.isNotEmpty()
                 }
             }
         } catch (_: Exception) {
         }
-        archiveUrls = out
-        archiveUrlsAt = System.currentTimeMillis()
-        return out
+        catalogAt = System.currentTimeMillis()
     }
 
-    /** Android 的 JVM 要的是本机架构对应的运行时。 */
+    /** Android 的 JVM 是原生库，必须和设备的 CPU 架构对得上。 */
     private val arch: String
         get() = when (System.getProperty("os.arch") ?: "") {
             "aarch64", "arm64" -> "arm64"
-            "armv7l", "arm" -> "arm32"
-            "x86_64", "amd64" -> "x64"
+            "armv7l", "arm", "armv7" -> "arm"
+            "x86_64", "amd64" -> "x86_64"
+            "x86", "i686", "i386" -> "x86"
             else -> "arm64"
         }
+
+    /** 服务端 config.json 里可选的自定义源（Link.JavaAndroid），默认不参与。 */
+    private fun serverPackages(major: Int): List<Package> {
+        val out = mutableListOf<Package>()
+        try {
+            val raw = Server.get("config.json") ?: return out
+            val link = JSONObject(raw).optJSONObject("Link") ?: return out
+            link.optJSONArray("JavaAndroid")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    if (o.optInt("major", 0) != major) continue
+                    val url = o.optString("url")
+                    if (url.isNotEmpty()) out += Package(o.optString("name", "自定义源"), url)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
+    /** 装完的目录里得有 libjvm.so，否则只是空壳（比如误装的桌面 JDK）。 */
+    private fun hasVmLibrary(dir: File): Boolean = findVmLibrary(dir, 0)
+
+    private fun findVmLibrary(dir: File, depth: Int): Boolean {
+        if (!dir.isDirectory || depth > 4) return false
+        if (File(dir, "libjvm.so").isFile) return true
+        dir.listFiles()?.forEach { if (findVmLibrary(it, depth + 1)) return true }
+        return false
+    }
 
     private fun externalPaths(): List<String> = listOf(
         "/data/data/com.termux/files/usr/bin/java",
@@ -412,12 +504,18 @@ object JavaRuntime {
         return null
     }
 
-    /** .zip 与 .tar.gz 都能解，按文件头判断，不看扩展名。 */
+    /** .zip / .tar.gz / .tar.xz 都能解，按文件头判断，不看扩展名。 */
     private fun extract(archive: File, dest: File) {
-        val head = ByteArray(2)
-        FileInputStream(archive).use { it.read(head) }
-        if (head.size == 2 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte()) {
+        val head = ByteArray(6)
+        val n = FileInputStream(archive).use { it.read(head) }
+        val isZip = n >= 2 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte()
+        val isXz = n >= 6 && head[0] == 0xFD.toByte() && head[1] == 0x37.toByte() &&
+            head[2] == 0x7A.toByte() && head[3] == 0x58.toByte() &&
+            head[4] == 0x5A.toByte() && head[5] == 0x00.toByte()
+        if (isZip) {
             unzip(archive, dest)
+        } else if (isXz) {
+            XZInputStream(FileInputStream(archive).buffered()).use { xz -> untar(xz, dest) }
         } else {
             untargz(archive, dest)
         }
@@ -479,12 +577,13 @@ object JavaRuntime {
                     if (name.endsWith("/bin/java")) out.setExecutable(true)
                 }
             }
-            // 跳过填充到 512 的整数倍
+            // 跳过填充到 512 的整数倍（用读+丢弃，InputStream.skip 可能只跳一点）
             val pad = (512 - (size % 512)) % 512
             var skipped = 0L
+            val sink = ByteArray(8 * 1024)
             while (skipped < pad) {
-                val n = input.skip(pad - skipped)
-                if (n <= 0) break
+                val n = input.read(sink, 0, minOf(sink.size.toLong(), pad - skipped).toInt())
+                if (n <= 0) return
                 skipped += n
             }
         }

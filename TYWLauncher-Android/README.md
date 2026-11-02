@@ -19,8 +19,12 @@ TYW Launcher 的 Android 版，Kotlin + Jetpack Compose，UI 结构与配色对�
   每个版本都能单独下载或「导入安装包」（本地 zip / tar.gz），已装的可以设为默认或移除。
   补全时会先按当前游戏版本的要求挑运行时：优先读版本 JSON 的 `javaVersion.majorVersion`，
   没有就按版本号推（1.20.5+ → 21、1.18~1.20.4 → 17、1.17.x → 16、更早 → 8），
-  已装版本低于要求时界面直接标红提示。下载地址走服务端 `Link.JavaAndroid`，
-  缺省回退 `java-android-<大版本>-<架构>.zip` 与 `java-android-<架构>.zip`。
+  已装版本低于要求时界面直接标红提示。
+  下载**直连公网、不占服务端**：用与 FCL / Pojav 同源的 Android 原生运行时
+  （`jre<大版本>-<架构>-<日期>-release.tar.xz`，Java 8 / 17 / 21 / 25），先查 GitHub Releases 取最新直链，
+  查不到退回固定 tag 直链，直链不通再按顺序换公共镜像重试。
+  注：Azul Zulu 只有 Linux（glibc）／Alpine（musl）／Windows／macOS 目标，**没有 Android（bionic）构建**，
+  桌面 JDK 在手机上无法执行，所以不采用；Java 11 / 16 也没有对应构建，需要时用「导入安装包」。
 - **触控布局**：数据结构、默认键位与编辑方式参考 FCL（Fold Craft Launcher）。默认布局包含移动摇杆、
   视角区、攻击 / 使用、跳跃 / 潜行 / 疾跑、背包 / 聊天、丢弃 / 交换副手、切换视角 / 暂停，以及底部 9 格物品栏；
   坐标按屏幕百分比保存，可导出 JSON。
