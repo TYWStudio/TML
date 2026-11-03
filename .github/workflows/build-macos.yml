@@ -32,9 +32,11 @@ jobs:
           dotnet-version: 8.0.x
 
       # .icns 与 zip 打包走 python3（Pillow）。AppIcon.icns 已经入库，
-      # 这里装 Pillow 只是为了干净的重新生成与校验。
-      - name: Install Pillow
-        run: python3 -m pip install --quiet pillow
+      # 这里装 Pillow 只是为了能干净地重新生成图标；runner 上 pip 可能是
+      # externally-managed，装不上也不影响出包，所以允许失败。
+      - name: Install Pillow (optional)
+        continue-on-error: true
+        run: python3 -m pip install --quiet --break-system-packages pillow || true
 
       - name: Publish three channels
         working-directory: TYWLauncher-macOS
