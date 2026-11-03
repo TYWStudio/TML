@@ -70,11 +70,19 @@ Public Module ModApp
     End Property
 
     ''' <summary>
-    ''' 版本码：与服务端 config.json 的 Linux.Channels.&lt;通道&gt;.VersionCode 对比。
-    ''' 每个通道各自从 1 开始递增，互不影响。
+    ''' 版本码：与服务端 config.json 的 Linux/MacOS.Channels.&lt;通道&gt;.VersionCode 对比。
+    ''' 每个通道、每个平台各自从 1 开始递增，互不影响。
     ''' </summary>
     Public ReadOnly Property VersionCode As Integer
         Get
+            If ModPlatform.IsMac Then
+                ' macOS 首发，独立计数
+                Select Case Channel
+                    Case LauncherChannel.Snapshot : Return 1
+                    Case LauncherChannel.Beta : Return 1
+                    Case Else : Return 1
+                End Select
+            End If
             Select Case Channel
                 Case LauncherChannel.Snapshot : Return 4
                 Case LauncherChannel.Beta : Return 4
@@ -83,14 +91,10 @@ Public Module ModApp
         End Get
     End Property
 
-    ''' <summary>当前通道在服务端 www 里的 Linux 包文件名。</summary>
+    ''' <summary>当前通道在服务端 www 里的安装包文件名（按平台）。</summary>
     Public ReadOnly Property PackageFileName As String
         Get
-            Select Case Channel
-                Case LauncherChannel.Snapshot : Return "TYWLauncher-linux-x64-snapshot.tar.gz"
-                Case LauncherChannel.Beta : Return "TYWLauncher-linux-x64-beta.tar.gz"
-                Case Else : Return "TYWLauncher-linux-x64.tar.gz"
-            End Select
+            Return ModPlatform.PackageFileName(Channel)
         End Get
     End Property
 

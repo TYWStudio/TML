@@ -1,22 +1,27 @@
 Imports System.IO
 
 ''' <summary>
-''' Linux 下的路径约定（对应 Windows 版 ModBase / Path）。
+''' 路径约定（对应 Windows 版 ModBase / Path）。平台差异从 ModPlatform 取：
+''' Linux 走 XDG（~/.local/share、~/.minecraft），
+''' macOS 走 Apple 惯例（~/Library/Application Support/TYWLauncher、.../minecraft）。
 ''' </summary>
 Public Module ModPaths
 
-    Private ReadOnly Home As String =
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+    Private ReadOnly Home As String = ModPlatform.Home
 
-    ''' <summary>启动器数据目录：~/.local/share/TYWLauncher</summary>
+    ''' <summary>启动器数据目录。</summary>
     Public ReadOnly Root As String =
         If(Environment.GetEnvironmentVariable("TYW_DATA_DIR"),
-           Path.Combine(Home, ".local", "share", "TYWLauncher"))
+           If(ModPlatform.IsMac,
+              Path.Combine(Home, "Library", "Application Support", "TYWLauncher"),
+              Path.Combine(Home, ".local", "share", "TYWLauncher")))
 
-    ''' <summary>游戏目录：默认 ~/.minecraft，可用 TYW_MC_DIR 覆盖</summary>
+    ''' <summary>游戏目录：默认与原版启动器一致，可用 TYW_MC_DIR 覆盖。</summary>
     Public ReadOnly McFolder As String =
         If(Environment.GetEnvironmentVariable("TYW_MC_DIR"),
-           Path.Combine(Home, ".minecraft"))
+           If(ModPlatform.IsMac,
+              Path.Combine(Home, "Library", "Application Support", "minecraft"),
+              Path.Combine(Home, ".minecraft")))
 
     Public ReadOnly LogDir As String = Path.Combine(Root, "Log")
     Public ReadOnly CacheDir As String = Path.Combine(Root, "Cache")

@@ -10,11 +10,18 @@ launch the copy of the game they already own. No ads, no in-app purchases, no mo
 - Issue tracker: https://github.com/TYW-MC/TYW-Minecraft-Launcher/issues
 - Platforms:
   - **Windows** x64 · VB.NET / WPF · .NET Framework 4.8
-  - **Linux** x64 · Avalonia 12 (VB.NET core + C# UI) · amd64
+  - **Linux** x64 / arm64 · Avalonia 12 (VB.NET core + C# UI)
+  - **macOS** 11+ · Apple Silicon (arm64) / Intel (x64) · same Avalonia codebase as Linux, packaged as a signed `.app`
   - **Android** 8.0+ · Kotlin / Jetpack Compose · arm64-v8a
 
-All three platforms share the same UI structure, the same 15-preset theme engine, the same three release channels
+All platforms share the same UI structure, the same 15-preset theme engine, the same three release channels
 (Release / Snapshot / Beta) and the same server protocol.
+
+**macOS notes:** the app is ad-hoc signed (`codesign -s -`), not notarized, so the first launch needs
+right-click → Open (or `xattr -dr com.apple.quarantine "/Applications/TYW Launcher.app"`). In-app updates and
+channel switching work by swapping the whole `.app` bundle, clearing the quarantine attribute and re-signing
+ad-hoc; EasyTier multiplayer is not available on macOS yet (creating a TUN device needs root), and the
+multiplayer page says so in-place.
 
 Game files are **not** redistributed here; they are downloaded at runtime from official / official-mirror CDNs.
 The launcher does not bypass authentication or entitlement checks — online play requires owning Minecraft: Java
@@ -119,16 +126,28 @@ msbuild "TYW Launcher.sln" /restore /p:Configuration=Release /m
 
 **Linux** — `dotnet publish TYWLauncher-Linux/src/TYW.Desktop/TYW.Desktop.csproj -c Release -r linux-x64 -p:TYWChannel=Release`
 
+**macOS** — same project, macOS RID, then wrap it into a `.app` (must run on macOS: needs `codesign` + `ditto`):
+
+```bash
+# arm64 (Apple Silicon) / osx-x64 for Intel
+dotnet publish TYWLauncher-Linux/src/TYW.Desktop/TYW.Desktop.csproj -c Release -r osx-arm64 --self-contained true -p:TYWChannel=Release -o out/mac
+TYWLauncher-Linux/packaging/macos/build-app.sh out/mac Release arm64 dist
+```
+
+`build-app.sh` writes `Info.plist`, drops in `packaging/macos/TYWLauncher.icns`, ad-hoc signs the bundle
+(`codesign --force --deep --sign -`) and produces `TYWLauncher-macos-<arch>[-snapshot|-beta].zip` for the server's
+`www` directory. Regenerate the icon with `py packaging/macos/make_icns.py` (needs Pillow) after changing `Images/icon.ico`.
+
 **Android** — `./gradlew assembleRelease` / `assembleSnapshot` / `assembleDebug` (one build type per channel)
 
-Or just push a tag (`v*`) — **GitHub Actions builds all three platforms automatically and attaches every artefact
-(Windows exe, Linux tar.gz ×3, Android APK ×3) to a GitHub Release**.
+Or just push a tag (`v*`) — **GitHub Actions builds all platforms automatically and attaches every artefact
+(Windows exe, Linux tar.gz ×3, macOS zip ×3 ×2 arch, Android APK ×3) to a GitHub Release**.
 
 ## Repository Layout
 
 ```
 TYW Launcher/             Windows launcher project (VB.NET WPF, .NET Framework 4.8)
-TYWLauncher-Linux/        Linux launcher (Avalonia 12)
+TYWLauncher-Linux/        Linux + macOS launcher (Avalonia 12); packaging/macos holds the .app bundler
 TYWLauncher-Android/      Android launcher (Kotlin / Jetpack Compose)
 PCLCS/                    PCL core support code (from the upstream open-source release)
 MeloongCore/              Git submodule (Apache-2.0, https://github.com/Meloong-Git/MeloongCore)

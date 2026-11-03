@@ -438,35 +438,10 @@ public partial class PageLaunchLeft : UserControl
         SwapLogin(stack);
     }
 
-    /// <summary>用系统默认浏览器打开网页（Linux 走 xdg-open）。</summary>
+    /// <summary>用系统默认浏览器打开网页（Linux 走 xdg-open，macOS 走 open）。</summary>
     private static void OpenInBrowser(string url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "xdg-open",
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            };
-            psi.ArgumentList.Add(url);
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch
-        {
-            // 没有 xdg-open 时退回 ShellExecute
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                ModLog.Err(ex, "打开浏览器");
-            }
-        }
+        SysShell.OpenUrl(url);
     }
 
     private void CopyText(string text)

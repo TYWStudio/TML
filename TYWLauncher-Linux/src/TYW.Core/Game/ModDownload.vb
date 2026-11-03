@@ -364,16 +364,24 @@ Public Module ModDownload
                         End If
                         Dim cls As JsonElement
                         If dls.TryGetProperty("classifiers", cls) Then
+                            ' 只下本平台+本架构最合适的那个 native（macOS 的 JSON 里通常同时有
+                            ' natives-macos 与 natives-macos-arm64，全下会白拉几十 MB）
+                            Dim keys As New List(Of String)
                             For Each cProp In cls.EnumerateObject()
-                                Dim key = cProp.Name
-                                If Not IsNativeKeyForLinux(key) Then Continue For
-                                Dim u = Str(cProp.Value, "url")
-                                Dim p = Str(cProp.Value, "path")
-                                If String.IsNullOrEmpty(p) Then p = MavenToPath(libName & ":" & key)
-                                If u <> "" AndAlso p <> "" Then
-                                    libTasks.Add(Tuple.Create(Rewrite(u), Path.Combine(mcDir, "libraries", p.Replace("/"c, Path.DirectorySeparatorChar))))
-                                End If
+                                keys.Add(cProp.Name)
                             Next
+                            Dim bestKey = ModPlatform.BestClassifier(keys)
+                            If bestKey <> "" Then
+                                Dim chosen As JsonElement
+                                If cls.TryGetProperty(bestKey, chosen) Then
+                                    Dim u = Str(chosen, "url")
+                                    Dim p = Str(chosen, "path")
+                                    If String.IsNullOrEmpty(p) Then p = MavenToPath(libName & ":" & bestKey)
+                                    If u <> "" AndAlso p <> "" Then
+                                        libTasks.Add(Tuple.Create(Rewrite(u), Path.Combine(mcDir, "libraries", p.Replace("/"c, Path.DirectorySeparatorChar))))
+                                    End If
+                                End If
+                            End If
                         End If
                     Else
                         ' 老版本没有 downloads 字段
@@ -574,7 +582,7 @@ Public Module ModDownload
         End Using
     End Sub
 
-    ''' <summary>规则判断：当前平台（Linux）是否适用。</summary>
+    ''' <summary>规则判断：当前平台（Linux / macOS）与当前架构是否适用。</summary>
     Public Function LibAllowed(libEl As JsonElement) As Boolean
         Dim rules As JsonElement
         If Not libEl.TryGetProperty("rules", rules) Then Return True
@@ -585,24 +593,20 @@ Public Module ModDownload
             Dim matchAs = True
             If rule.TryGetProperty("os", osEl) Then
                 Dim name = Str(osEl, "name")
-                If name <> "" AndAlso name <> "linux" Then matchAs = False
+                Dim expectName = If(ModPlatform.IsMac, "osx", "linux")
+                If name <> "" AndAlso name <> expectName Then matchAs = False
                 Dim arch = Str(osEl, "arch")
-                If arch <> "" Then
-                    Dim is64 = Environment.Is64BitOperatingSystem
-                    If (arch = "x86" AndAlso is64) OrElse (arch = "x86_64" AndAlso Not is64) Then matchAs = False
-                End If
+                Select Case arch
+                    Case "x86" : If ModPlatform.ArchName <> "x86" Then matchAs = False
+                    Case "x86_64" : If ModPlatform.ArchName <> "x64" Then matchAs = False
+                    Case "arm64", "aarch64" : If Not ModPlatform.IsArm64 Then matchAs = False
+                End Select
             End If
             If matchAs Then
                 allowed = (action = "allow")
             End If
         Next
         Return allowed
-    End Function
-
-    Private Function IsNativeKeyForLinux(key As String) As Boolean
-        Dim k = key.ToLowerInvariant()
-        If k.Contains("arm") Then Return False
-        Return k.Contains("linux")
     End Function
 
 #End Region

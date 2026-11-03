@@ -699,13 +699,6 @@ public class InstanceWindow : Window
 
     private static void OpenPath(string path)
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo("xdg-open", "\"" + path + "\"") { UseShellExecute = false });
-        }
-        catch (Exception ex)
-        {
-            ModLog.Err(ex, "打开目录");
-        }
+        SysShell.OpenFolder(path);
     }
 }

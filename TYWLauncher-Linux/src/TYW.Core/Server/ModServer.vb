@@ -79,7 +79,7 @@ Public Module ModServer
                         If linkEl.TryGetProperty("DiscoverPeerId", e) Then lc.DiscoverPeerId = e.GetInt32()
                         If linkEl.TryGetProperty("DiscoverPeer", e) Then lc.DiscoverPeer = e.GetString()
                         If linkEl.TryGetProperty("RandomPeer", e) Then lc.RandomPeer = e.GetInt32()
-                        lc.Downloads = ReadStringList(linkEl, "DownloadsLinux")
+                        lc.Downloads = ReadStringList(linkEl, ModPlatform.LinkDownloadsKey)
                         If lc.Downloads.Count = 0 Then lc.Downloads = ReadStringList(linkEl, "Downloads")
                         lc.Peers = ReadStringList(linkEl, "Peers")
                         lc.MandatoryPeers = ReadStringList(linkEl, "MandatoryPeers")
@@ -154,7 +154,7 @@ Public Module ModServer
     End Function
 
     ''' <summary>
-    ''' 读某个通道的 Linux 包信息：先看 config.json 的 Linux.Channels.&lt;通道&gt;，
+    ''' 读某个通道的安装包信息：先看 config.json 的 &lt;平台&gt;.Channels.&lt;通道&gt;
     ''' 没有则回退到旧的 Linux.LauncherVersionCode / LauncherUrl（正式通道）。
     ''' </summary>
     Public Function GetChannelInfo(Optional channel As String = "") As (Code As Integer, File As String)
@@ -165,10 +165,10 @@ Public Module ModServer
             Using doc = JsonDocument.Parse(cfg)
                 Dim root = doc.RootElement
                 Dim e As JsonElement
-                If Not root.TryGetProperty("Linux", e) Then Return (0, "")
+                If Not root.TryGetProperty(ModPlatform.ServerSection, e) Then Return (0, "")
                 Dim code = 0
                 Dim file = ""
-                '新格式：Linux.Channels.<通道>
+                '新格式：<平台>.Channels.<通道>
                 Dim channels As JsonElement
                 If e.TryGetProperty("Channels", channels) AndAlso channels.ValueKind = JsonValueKind.Object Then
                     Dim ch As JsonElement
@@ -179,8 +179,8 @@ Public Module ModServer
                         If file = "" AndAlso ch.TryGetProperty("Url", el) Then file = el.GetString()
                     End If
                 End If
-                '旧格式回退（只有正式版）
-                If code = 0 AndAlso channel = "Release" Then
+                '旧格式回退（只有 Linux 正式版用过这种字段）
+                If code = 0 AndAlso channel = "Release" AndAlso ModPlatform.IsLinux Then
                     Dim el As JsonElement
                     If e.TryGetProperty("LauncherVersionCode", el) Then code = el.GetInt32()
                     If file = "" AndAlso e.TryGetProperty("LauncherUrl", el) Then file = el.GetString()

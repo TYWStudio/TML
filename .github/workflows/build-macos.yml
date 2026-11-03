@@ -1,0 +1,76 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VERSION: '1.1.37'
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    # macos-14 = Apple Silicon。osx-x64 也在 arm64 机器上交叉发布：
+    # 托管代码不需要本地编译，只要下载对应架构的 runtime pack 即可。
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # .icns 与 zip 打包走 python3（Pillow）。AppIcon.icns 已经入库，
+      # 这里装 Pillow 只是为了干净的重新生成与校验。
+      - name: Install Pillow
+        run: python3 -m pip install --quiet pillow
+
+      - name: Publish three channels
+        working-directory: TYWLauncher-macOS
+        env:
+          PYTHON: python3
+        run: bash ./packaging/build-macos.sh "$VERSION" ${{ matrix.arch }}
+
+      - name: Verify bundle
+        working-directory: TYWLauncher-macOS
+        run: |
+          set -e
+          want='arm64'
+          [ "${{ matrix.arch }}" = 'x64' ] && want='x86_64'
+          for f in dist/TYWLauncher-macos-*.zip; do
+            echo "--- $f"
+            unzip -l "$f" | grep -q 'Contents/Info.plist'
+          done
+          rm -rf /tmp/vfy && mkdir -p /tmp/vfy
+          unzip -q "dist/TYWLauncher-macos-${{ matrix.arch }}.zip" -d /tmp/vfy
+          file "/tmp/vfy/TYW Launcher.app/Contents/MacOS/TYWLauncher" | tee /tmp/vfy/arch.txt
+          grep -q "$want" /tmp/vfy/arch.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TYWLauncher-macos-${{ matrix.arch }}
+          path: |
+            TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
+            TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
+          if-no-files-found: error
+
+      - name: Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
+            TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
+          generate_release_notes: true

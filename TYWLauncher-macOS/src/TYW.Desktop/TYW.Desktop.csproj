@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>TYW.Desktop</RootNamespace>
+    <AssemblyName>TYWLauncher</AssemblyName>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <EnableDefaultAvaloniaItems>true</EnableDefaultAvaloniaItems>
+
+    <!-- macOS 打包只认两个 RID，交叉编译用 -r osx-arm64 / osx-x64 指定 -->
+    <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
+
+    <!-- 进 .app 后 Dock 名称、关于窗口都用这几个 -->
+    <AssemblyTitle>TYW Launcher</AssemblyTitle>
+    <Product>TYW Launcher</Product>
+    <Company>TYW Studio</Company>
+    <Version>1.1.37</Version>
+    <FileVersion>1.1.37.0</FileVersion>
+    <AssemblyVersion>1.1.37.0</AssemblyVersion>
+  </PropertyGroup>
+
+  <!-- app.manifest 是 Windows 专用，osx 目标下不引用，否则 dotnet publish 会尝试嵌入 Win32 资源 -->
+  <PropertyGroup Condition="!$(RuntimeIdentifier.StartsWith('osx'))">
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TYW.Core\TYW.Core.vbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 内置默认皮肤（离线头像用 Steve 正脸，与 Windows 版一致） -->
+    <AvaloniaResource Include="Assets\**\*.png" />
+    <AvaloniaResource Include="Assets\**\*.json" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>TYW</RootNamespace>
+    <AssemblyName>TYW.Core</AssemblyName>
+    <MyType>Empty</MyType>
+    <OptionStrict>Off</OptionStrict>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionInfer>On</OptionInfer>
+    <OptionCompare>Binary</OptionCompare>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);BC40000;BC42104;BC42353;BC42354;BC42355;BC42356;BC42024;BC42030</NoWarn>
+
+    <!-- 通道：Release 配置 = 正式版，Debug 配置 = 内测版，Snapshot 配置 = 快照版，
+         -p:TYWChannel=Snapshot/Beta 也可手动指定。产物名都一样（TYWLauncher），
+         由发布脚本按通道改名，和 Windows 版三配置的约定一致。 -->
+    <TYWChannel Condition="'$(TYWChannel)' == '' and '$(Configuration)' == 'Debug'">Beta</TYWChannel>
+    <TYWChannel Condition="'$(TYWChannel)' == '' and '$(Configuration)' == 'Snapshot'">Snapshot</TYWChannel>
+    <TYWChannel Condition="'$(TYWChannel)' == ''">Release</TYWChannel>
+    <DefineConstants Condition="'$(TYWChannel)' == 'Snapshot'">$(DefineConstants),TYW_CHANNEL_SNAPSHOT</DefineConstants>
+    <DefineConstants Condition="'$(TYWChannel)' == 'Beta'">$(DefineConstants),TYW_CHANNEL_BETA</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Import Include="System" />
+    <Import Include="System.IO" />
+    <Import Include="System.Linq" />
+    <Import Include="System.Text" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Threading.Tasks" />
+  </ItemGroup>
+
+</Project>

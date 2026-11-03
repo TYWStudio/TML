@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="clr-namespace:TYW.Desktop.Controls"
+             x:Class="TYW.Desktop.Views.PageLaunchLeft"
+             Width="300" Background="Transparent">
+
+  <!-- 逐层对应 Windows 版 Pages/PageLaunch/PageLaunchLeft.xaml -->
+  <Grid x:Name="PanBack">
+    <Grid x:Name="PanInput" RenderTransformOrigin="0.5,0.5">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="20" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="20" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="10" />
+      </Grid.ColumnDefinitions>
+      <Grid.RenderTransform>
+        <ScaleTransform />
+      </Grid.RenderTransform>
+
+      <!-- 版本选择 / 版本设置 -->
+      <ctrl:PclButton Grid.Row="3" Grid.Column="2" x:Name="BtnVersion" Height="35" Margin="0,10,10,0" Text="版本选择" />
+      <ctrl:PclButton Grid.Row="3" Grid.Column="3" x:Name="BtnMore" Height="35" Margin="0,10,10,0" TextPadding="14,0" Text="版本设置" IsVisible="False" />
+
+      <!-- 登录区（由代码填充） -->
+      <Grid Grid.ColumnSpan="5" Grid.Row="1" Margin="20,0" VerticalAlignment="Center" x:Name="PanLogin" />
+
+      <!-- 已登录：登录类型胶囊 -->
+      <Grid Grid.ColumnSpan="5" Margin="20,24,20,-4" x:Name="PanTypeOne" IsVisible="False">
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{StaticResource ColorBrushSemiTransparent}" CornerRadius="13" MinHeight="27" MaxHeight="27">
+          <StackPanel Orientation="Horizontal">
+            <Path x:Name="PathTypeOne" HorizontalAlignment="Left" RenderTransformOrigin="0.5,0.5" Margin="12,0,0,0"
+                  Stretch="Uniform" Fill="{StaticResource ColorBrush3}" MaxHeight="16" MaxWidth="16" VerticalAlignment="Center">
+              <Path.RenderTransform>
+                <ScaleTransform ScaleX="1.05" ScaleY="1.05" />
+              </Path.RenderTransform>
+            </Path>
+            <TextBlock x:Name="LabTypeOne" FontSize="14" VerticalAlignment="Center"
+                       Foreground="{StaticResource ColorBrush3}" Margin="15,0,12,0" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- 未登录：正版 / 离线 -->
+      <Grid Grid.ColumnSpan="5" Margin="20,22,20,0" x:Name="PanType">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ctrl:PclRadioButton x:Name="RadioLoginType5" Grid.Column="2" Text="正版" Margin="4,0" LogoScale="1"
+                           Logo="M511.488256 95.184408c35.310345 22.516742 95.184408 55.78011 167.34033 84.437781 75.738131 29.681159 148.405797 40.93953 191.392304 45.033483v353.615193c0 73.691154-50.662669 164.781609-136.123938 244.101949C649.65917 901.181409 558.568716 942.12094 512 942.12094c-46.568716 0-137.65917-40.93953-222.096952-119.748126C204.441779 742.54073 153.77911 651.450275 153.77911 577.247376v-353.103448c42.474763-4.093953 116.165917-15.352324 191.904048-45.545227 75.226387-30.192904 133.565217-63.456272 165.805098-83.414293M512 0c-4.093953 0-8.187906 1.535232-11.258371 3.582209l-14.84058 10.234882c-1.023488 0.511744-67.550225 47.592204-170.410794 88.531735-100.813593 39.916042-198.556722 41.963018-199.58021 41.963018l-25.075462 0.511744c-10.746627 0.511744-18.934533 8.187906-18.934533 18.422789v414.000999c0 216.97951 286.064968 446.24088 440.09995 446.24088s440.09995-229.261369 440.09995-445.729136V163.758121c0-10.234883-8.69965-18.422789-18.934533-18.422789l-24.563718-0.511744c-1.023488 0-98.766617-2.046977-199.58021-41.963018-103.372314-40.93953-170.410795-88.01999-170.922538-88.531734L523.258371 3.582209c-3.070465-2.558721-7.164418-3.582209-11.258371-3.582209z M743.308346 410.930535l-260.477761 260.477761c-15.864068 15.864068-41.963018 15.864068-57.827087 0l-144.823588-144.823588c-15.864068-15.864068-15.864068-41.963018 0-57.827087 8.187906-8.187906 18.422789-11.770115 29.169415-11.770115 10.234883 0 20.981509 4.093953 29.169416 11.770115l115.654173 115.654173L685.993003 352.591704c15.864068-15.864068 41.963018-15.864068 57.827087 0 15.352324 16.375812 15.352324 42.474763-0.511744 58.338831z" />
+        <ctrl:PclRadioButton x:Name="RadioLoginType0" Grid.Column="3" Text="离线" Margin="4,0" LogoScale="0.85"
+                           Logo="M533.293176 788.841412a60.235294 60.235294 0 1 1 85.202824 85.202823l-42.616471 42.586353c-129.355294 129.385412-339.124706 129.385412-468.510117 0-129.385412-129.385412-129.385412-339.124706 0-468.510117l42.586353-42.616471a60.235294 60.235294 0 1 1 85.202823 85.202824l-42.61647 42.586352a210.823529 210.823529 0 1 0 298.164706 298.164706l42.586352-42.61647z m255.548236-255.548236l42.61647-42.586352a210.823529 210.823529 0 1 0-298.164706-298.164706l-42.586352 42.61647a60.235294 60.235294 0 1 1-85.202824-85.202823l42.616471-42.586353c129.355294-129.385412 339.124706-129.385412 468.510117 0 129.385412 129.385412 129.385412 339.124706 0 468.510117l-42.586353 42.616471a60.235294 60.235294 0 1 1-85.202823-85.202824zM192.542118 192.542118a60.235294 60.235294 0 0 1 85.202823 0l553.712941 553.712941a60.235294 60.235294 0 0 1-85.202823 85.202823L192.542118 277.744941a60.235294 60.235294 0 0 1 0-85.202823z" />
+      </Grid>
+
+      <!-- 启动按钮 + 版本名 -->
+      <Grid Grid.ColumnSpan="5" Grid.Row="2" RenderTransformOrigin="0.5,0.5">
+        <ctrl:PclButton x:Name="BtnLaunch" Height="54" Margin="20,0" Text="正在加载" ColorType="Highlight" TextPadding="30,0,30,15" />
+        <TextBlock x:Name="LabVersion" Text="正在加载版本列表，请稍候" Margin="35,0,35,10" IsHitTestVisible="False"
+                   VerticalAlignment="Bottom" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   FontSize="11" Foreground="{StaticResource ColorBrushGray3}" />
+      </Grid>
+    </Grid>
+
+    <!-- 启动中：对应 PageLaunchLeft 的 PanLaunching（镐子动画 + 进度条 + 信息表 + 取消） -->
+    <Grid x:Name="PanLaunching" IsVisible="False" Opacity="0" RenderTransformOrigin="0.5,0.5">
+      <Grid.RenderTransform>
+        <ScaleTransform ScaleX="0.8" ScaleY="0.8" />
+      </Grid.RenderTransform>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <StackPanel Grid.Row="1" Margin="0,-7,0,0">
+        <ctrl:PclLoading x:Name="LoadLaunching" Height="46" Margin="0,4,0,2" />
+        <TextBlock x:Name="LabLaunchingTitle" Text="正在启动游戏" Margin="15,8,15,0" HorizontalAlignment="Center"
+                   FontSize="20" Foreground="{StaticResource ColorBrush3}">
+          <TextBlock.RenderTransform>
+            <SkewTransform AngleX="-3" />
+          </TextBlock.RenderTransform>
+        </TextBlock>
+        <TextBlock x:Name="LabLaunchingName" Text="" Margin="40,5,40,0" FontSize="13.5" HorizontalAlignment="Center"
+                   Foreground="{StaticResource ColorBrush3}" TextTrimming="CharacterEllipsis">
+          <TextBlock.RenderTransform>
+            <SkewTransform AngleX="-3" />
+          </TextBlock.RenderTransform>
+        </TextBlock>
+
+        <!-- 进度条：两列按进度分配宽度 -->
+        <Grid x:Name="PanProgressBar" Height="4" Margin="30,12,30,24">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0*" />
+            <ColumnDefinition Width="1*" />
+          </Grid.ColumnDefinitions>
+          <Rectangle Grid.Column="0">
+            <Rectangle.Fill>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#4890f5" Offset="0" />
+                <GradientStop Color="#1370f3" Offset="0.6" />
+              </LinearGradientBrush>
+            </Rectangle.Fill>
+          </Rectangle>
+          <Rectangle Grid.Column="1" Fill="{StaticResource ColorBrush6}" Opacity="0.6" />
+        </Grid>
+
+        <Grid x:Name="PanLaunchingInfo" HorizontalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="15" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBlock FontSize="12.5" Margin="0,0,0,5" Text="当前步骤" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Right" Opacity="0.5" />
+          <TextBlock x:Name="LabLaunchingStage" FontSize="12.5" Margin="0,0,0,5" Text="初始化" Grid.Row="0" Grid.Column="2" HorizontalAlignment="Left" />
+          <TextBlock FontSize="12.5" Margin="0,0,0,5" Text="登录方式" Grid.Row="1" Grid.Column="0" HorizontalAlignment="Right" Opacity="0.5" />
+          <TextBlock x:Name="LabLaunchingMethod" FontSize="12.5" Margin="0,0,0,5" Text="离线登录" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Left" />
+          <TextBlock x:Name="LabLaunchingProgressLeft" FontSize="12.5" Margin="0,0,0,5" Text="启动进度" Grid.Row="2" Grid.Column="0" HorizontalAlignment="Right" Opacity="0.5" />
+          <TextBlock x:Name="LabLaunchingProgress" FontSize="12.5" Margin="0,0,0,5" Text="0.00 %" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Left" />
+          <TextBlock x:Name="LabLaunchingDownloadLeft" FontSize="12.5" Margin="0,0,0,5" Text="下载速度" Grid.Row="3" Grid.Column="0"
+                     HorizontalAlignment="Right" Opacity="0" IsVisible="False" />
+          <TextBlock x:Name="LabLaunchingDownload" FontSize="12.5" Margin="0,0,0,5" Text="0 B/s" Grid.Row="3" Grid.Column="2"
+                     HorizontalAlignment="Left" Opacity="0" IsVisible="False" />
+
+          <!-- 你知道吗：与启动进度行同区域，启动完成后进度行淡出、这里淡入（对应 PanLaunchingHint） -->
+          <Grid x:Name="PanLaunchingHint" HorizontalAlignment="Center" Grid.Row="2" Grid.ColumnSpan="3"
+                Grid.RowSpan="2" Width="260" Margin="0,16,0,2" IsVisible="False" Opacity="0">
+            <Border Margin="0,8,0,0" BorderThickness="1" CornerRadius="3" BorderBrush="{StaticResource ColorBrushGray1}" Opacity="0.5" />
+            <TextBlock FontSize="12.5" Text="你知道吗" HorizontalAlignment="Center" VerticalAlignment="Top"
+                       Foreground="{StaticResource ColorBrushGray1}" Opacity="0.5" Margin="0,-8,0,0" />
+            <TextBlock x:Name="LabLaunchingHint" FontSize="12.5" Text=""
+                       Margin="11,21,11,10" TextWrapping="Wrap" HorizontalAlignment="Center" />
+          </Grid>
+        </Grid>
+      </StackPanel>
+
+      <ctrl:PclButton x:Name="BtnCancelLaunch" Grid.Row="3" Text="取消" Height="35" Margin="20,0,20,20"
+                      VerticalAlignment="Bottom" />
+    </Grid>
+  </Grid>
+</UserControl>

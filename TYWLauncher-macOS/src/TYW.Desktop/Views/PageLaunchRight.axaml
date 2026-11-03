@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="clr-namespace:TYW.Desktop.Controls"
+             x:Class="TYW.Desktop.Views.PageLaunchRight"
+             Background="Transparent">
+
+  <!-- 逐层对应 Windows 版 Pages/PageLaunch/PageLaunchRight.xaml：
+       ScrollViewer > StackPanel(Margin 25,25,25,10) > 提示条 / 自定义区 / 启动日志 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+    <StackPanel x:Name="PanMain" Margin="25,25,25,10">
+      <ctrl:PclHint x:Name="PanHint" Margin="0,0,0,15" IsVisible="False"
+                    Text="快照版 TYW Launcher 包含尚未正式发布的测试功能，仅限赞助者自己使用。&#xa;请不要随意发给其他人，或是用来制作整合包哦！" />
+      <StackPanel x:Name="PanCustom" />
+      <ctrl:PclCard x:Name="PanLog" Margin="0,0,0,15" Title="启动日志" IsVisible="False" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

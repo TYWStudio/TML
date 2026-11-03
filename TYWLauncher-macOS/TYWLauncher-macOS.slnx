@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TYW.Core/TYW.Core.vbproj" />
+    <Project Path="src/TYW.Desktop/TYW.Desktop.csproj" />
+  </Folder>
+</Solution>

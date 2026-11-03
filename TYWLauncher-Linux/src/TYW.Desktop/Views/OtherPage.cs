@@ -311,7 +311,7 @@ public static class OtherPage
         stack.Children.Add(PersonItem("龙腾猫跃", "Plain Craft Launcher 原作者，感谢他写出的优秀启动器！"));
         stack.Children.Add(PersonItem("HerobrineXia", "Plain Craft Launcher 的协力开发者！"));
         stack.Children.Add(PersonItem("TYW Launcher",
-            "当前版本：" + ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "，Linux）"));
+            "当前版本：" + ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "，" + ModPlatform.DisplayName + "）"));
         var update = new PclButton
         {
             Text = "检查更新",
@@ -631,16 +631,6 @@ public static class OtherPage
 
     private static void OpenUrl(string url)
     {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", url)
-            {
-                UseShellExecute = false
-            });
-        }
-        catch (Exception ex)
-        {
-            ModLog.Err(ex, "打开网页");
-        }
+        SysShell.OpenUrl(url);
     }
 }

@@ -9,6 +9,8 @@ Public Class JavaItem
     Public Property Major As Integer = 0
     Public Property FullVersion As String = ""
     Public Property Arch As String = ""
+    ''' <summary>架构名：arm64 / x64 / x86（macOS 上要挑与启动器同架构的 Java，否则 Rosetta 下会崩）。</summary>
+    Public Property ArchName As String = ""
     Public Property Vendor As String = ""
 
     Public ReadOnly Property Display As String
@@ -21,8 +23,8 @@ Public Class JavaItem
 End Class
 
 ''' <summary>
-''' Linux 下的 Java 检测。对应 Windows 版 ModJava。
-''' 搜索顺序：启动器自带 JRE → 设置中手工指定 → PATH → /usr/lib/jvm → 常见安装位置。
+''' Java 检测（Linux / macOS 共用）。对应 Windows 版 ModJava。
+''' 搜索顺序：启动器自带 JRE → 设置中手工指定 → PATH → 系统 JVM 目录。
 ''' </summary>
 Public Module ModJava
 
@@ -46,22 +48,21 @@ Public Module ModJava
         ' 3. PATH
         Dim pathEnv = Environment.GetEnvironmentVariable("PATH")
         If Not String.IsNullOrEmpty(pathEnv) Then
-            For Each d In pathEnv.Split(":"c)
+            For Each d In pathEnv.Split(Path.PathSeparator)
                 If d.Length = 0 Then Continue For
                 Dim j = Path.Combine(d, "java")
-                If File.Exists(j) Then Probe(j, result, seen)
+                If File.Exists(j) AndAlso Not ModPlatform.IsJavaStub(j) Then Probe(j, result, seen)
             Next
         End If
-        ' 4. /usr/lib/jvm 与其它常见目录
-        For Each jvmRoot In {"/usr/lib/jvm", "/usr/java", "/opt/java", "/opt/jdk", "/usr/local/java"}
+        ' 4. 系统 JVM 目录（Linux: /usr/lib/jvm 等；macOS: /Library/Java/JavaVirtualMachines）
+        For Each jvmRoot In ModPlatform.JvmRoots()
             Try
                 If Not Directory.Exists(jvmRoot) Then Continue For
                 For Each subDir In Directory.GetDirectories(jvmRoot)
-                    Dim j = Path.Combine(subDir, "bin", "java")
-                    If File.Exists(j) Then Probe(j, result, seen)
-                    ' 有些发行版是 jvm/<name>/jre/bin/java 或者 bin/java 是符号链接
-                    Dim j2 = Path.Combine(subDir, "jre", "bin", "java")
-                    If File.Exists(j2) Then Probe(j2, result, seen)
+                    For Each rel In ModPlatform.JavaRelPaths()
+                        Dim j = Path.Combine(subDir, rel.Replace("/"c, Path.DirectorySeparatorChar))
+                        If File.Exists(j) AndAlso Not ModPlatform.IsJavaStub(j) Then Probe(j, result, seen)
+                    Next
                 Next
             Catch
             End Try
@@ -100,15 +101,18 @@ Public Module ModJava
         ' Linux 上直接用 libc 的 realpath：能把路径里每一级目录的符号链接都解开
         '（/usr/bin/java → /etc/alternatives/java → /usr/lib/jvm/java-21-openjdk-amd64/bin/java，
         ' 而 java-21-openjdk-amd64 本身又是指向 java-1.21.0-openjdk-amd64 的链接）
-        Try
-            Dim p = RealPathNative(startPath, IntPtr.Zero)
-            If p <> IntPtr.Zero Then
-                Dim s = Marshal.PtrToStringAnsi(p)
-                FreeNative(p)
-                If Not String.IsNullOrEmpty(s) Then Return s
-            End If
-        Catch
-        End Try
+        ' macOS 的 libSystem 没有同名导出，走下面的托管实现（FileInfo.LinkTarget）。
+        If ModPlatform.IsLinux Then
+            Try
+                Dim p = RealPathNative(startPath, IntPtr.Zero)
+                If p <> IntPtr.Zero Then
+                    Dim s = Marshal.PtrToStringAnsi(p)
+                    FreeNative(p)
+                    If Not String.IsNullOrEmpty(s) Then Return s
+                End If
+            Catch
+            End Try
+        End If
 
         Dim cur = startPath
         For i = 1 To 8
@@ -166,6 +170,7 @@ Public Module ModJava
                 If am.Success Then
                     Dim a = am.Groups(1).Value.ToLowerInvariant()
                     item.Arch = If(a.Contains("64"), "64", "32")
+                    item.ArchName = ModPlatform.NormalizeArch(a)
                 End If
                 Dim vm = Regex.Match(out, "java\.vm\.vendor\s*=\s*(.+)")
                 If vm.Success Then item.Vendor = vm.Groups(1).Value.Trim()
@@ -191,10 +196,18 @@ Public Module ModJava
         Return first
     End Function
 
-    ''' <summary>按版本要求挑一个最合适的 Java：同大版本优先，其次更高的。</summary>
+    ''' <summary>
+    ''' 按版本要求挑一个最合适的 Java：同大版本优先，其次更高的。
+    ''' 同版本里优先与启动器同架构的（Apple Silicon 上混用 x64 Java 会走 Rosetta，性能与 native 库都会出问题）。
+    ''' </summary>
     Public Function Best(Optional required As Integer = 0) As JavaItem
         Dim list = ListJava()
         If list.Count = 0 Then Return Nothing
+
+        ' 先挑与启动器架构一致的；一个都没有（老 JDK 不报 os.arch）再用全部
+        Dim sameArch = list.Where(Function(j) String.IsNullOrEmpty(j.ArchName) OrElse j.ArchName = ModPlatform.ArchName).ToList()
+        If sameArch.Count > 0 Then list = sameArch
+
         If required <= 0 Then Return list(list.Count - 1)
         Dim exact = list.LastOrDefault(Function(j) j.Major = required)
         If exact IsNot Nothing Then Return exact

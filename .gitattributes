@@ -64,3 +64,12 @@ TYWLauncher-Linux/** text eol=lf
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# 二进制资源：禁止任何换行转换（icns/png 被改成 LF 会直接损坏）
+###############################################################################
+*.icns binary
+*.ico  binary
+*.png  binary
+*.zip  binary
+*.dylib binary

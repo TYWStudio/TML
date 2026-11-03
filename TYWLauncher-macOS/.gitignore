@@ -1,0 +1,21 @@
+# 构建产物
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+
+# 打包/发布中间产物
+dist/
+.tools/
+packaging/build/
+packaging/*.deb
+packaging/*.AppImage
+packaging/*.tar.gz
+
+# macOS
+.DS_Store
+stage/
+*.zip
+packaging/*.icns.tmp

@@ -128,6 +128,9 @@ Public Module ModLink
     ''' 准备 EasyTier：本地版本过旧则下载 zip 并解压。每步更新 StageText。
     ''' </summary>
     Public Sub EnsureEasyTier(progress As Action(Of Double, String))
+        If Not ModPlatform.SupportsLink Then
+            Throw New Exception("macOS 版暂不支持联机（EasyTier 创建 TUN 设备需要管理员权限，正在适配）")
+        End If
         Dim cfg = ModServer.Link
         Dim version = If(cfg IsNot Nothing, cfg.EasyTierVersion, 20264)
         progress(0.05, "正在检查联机模块……")

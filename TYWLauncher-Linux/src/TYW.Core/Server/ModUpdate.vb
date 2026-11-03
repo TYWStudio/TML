@@ -27,6 +27,9 @@ Public Module ModUpdate
     ''' onStage：阶段文本；progress：0~1。
     ''' </summary>
     Public Function ApplyUpdate(packageUrl As String, progress As Action(Of Double, String)) As Boolean
+        If Not ModPlatform.SupportsSelfUpdate Then
+            Throw New Exception("macOS 版是签名的 .app 包，不支持就地替换更新，请到官网下载新版")
+        End If
         If Not OperatingSystem.IsLinux() Then Throw New Exception("当前平台不支持自更新")
         Dim workDir = Path.Combine(ModPaths.TempDir, "Update-" & Guid.NewGuid().ToString("N").Substring(0, 8))
         Directory.CreateDirectory(workDir)
@@ -107,12 +110,15 @@ Public Module ModUpdate
         End Try
     End Sub
 
-    ''' <summary>切换到指定通道：下载该通道的 Linux 包并替换重启。返回 False 表示未切换。</summary>
+    ''' <summary>切换到指定通道：下载该通道的安装包并替换重启。返回 False 表示未切换。</summary>
     Public Function SwitchChannel(targetChannel As String, betaCode As String,
                                   progress As Action(Of Double, String)) As Boolean
+        If Not ModPlatform.SupportsChannelSwitch Then
+            Throw New Exception("macOS 版暂不支持在启动器内切换通道，请到官网下载对应通道的安装包")
+        End If
         Dim info = ModServer.GetChannelInfo(targetChannel)
         If String.IsNullOrWhiteSpace(info.File) Then
-            Throw New Exception("服务端没有配置「" & ChannelDisplayOf(targetChannel) & "」的 Linux 安装包")
+            Throw New Exception("服务端没有配置「" & ChannelDisplayOf(targetChannel) & "」的" & ModPlatform.DisplayName & "安装包")
         End If
         Dim url = info.File
         If Not url.StartsWith("http", StringComparison.OrdinalIgnoreCase) Then

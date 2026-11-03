@@ -21,22 +21,26 @@ Public Module ModSecret
 
     ''' <summary>
     ''' 展示用设备识别码（形如 A1B2-C3D4-E5F6-7890）。
-    ''' /etc/machine-id + 主机名做 MD5，同一台机器稳定不变，不含明文个人信息。
+    ''' Linux：/etc/machine-id；macOS：IOPlatformUUID（ioreg）——同一台机器稳定不变，不含明文个人信息。
     ''' </summary>
     Public ReadOnly Property DeviceCode As String
         Get
             If _deviceCode IsNot Nothing Then Return _deviceCode
             Try
                 Dim seed As New StringBuilder()
-                For Each p In {"/etc/machine-id", "/var/lib/dbus/machine-id"}
-                    Try
-                        If File.Exists(p) Then
-                            seed.Append(File.ReadAllText(p).Trim())
-                            Exit For
-                        End If
-                    Catch
-                    End Try
-                Next
+                If ModPlatform.IsMac Then
+                    seed.Append(MacPlatformUuid())
+                Else
+                    For Each p In {"/etc/machine-id", "/var/lib/dbus/machine-id"}
+                        Try
+                            If File.Exists(p) Then
+                                seed.Append(File.ReadAllText(p).Trim())
+                                Exit For
+                            End If
+                        Catch
+                        End Try
+                    Next
+                End If
                 seed.Append("|").Append(Environment.MachineName)
                 seed.Append("|").Append(Environment.UserName)
                 Using md5 = System.Security.Cryptography.MD5.Create()
@@ -51,6 +55,28 @@ Public Module ModSecret
             Return _deviceCode
         End Get
     End Property
+
+    ''' <summary>macOS 的硬件 UUID（ioreg -c IOPlatformExpertDevice 里的 IOPlatformUUID）。取不到返回空串。</summary>
+    Private Function MacPlatformUuid() As String
+        Try
+            Dim psi As New System.Diagnostics.ProcessStartInfo With {
+                .FileName = "/usr/sbin/ioreg",
+                .Arguments = "-rd1 -c IOPlatformExpertDevice",
+                .UseShellExecute = False,
+                .RedirectStandardOutput = True,
+                .CreateNoWindow = True
+            }
+            Using p = System.Diagnostics.Process.Start(psi)
+                If p Is Nothing Then Return ""
+                Dim out = p.StandardOutput.ReadToEnd()
+                p.WaitForExit(3000)
+                Dim m = System.Text.RegularExpressions.Regex.Match(out, "IOPlatformUUID""\s*=\s*""([^""]+)""")
+                If m.Success Then Return m.Groups(1).Value
+            End Using
+        Catch
+        End Try
+        Return ""
+    End Function
 
 #End Region
 
@@ -92,7 +118,7 @@ Public Module ModSecret
                 title & vbCrLf &
                 "时间：" & Date.Now.ToString("yyyy-MM-dd HH:mm:ss") & vbCrLf &
                 "版本：" & ModApp.VersionBaseName & "（版本码 " & ModApp.VersionCode & "）" & vbCrLf &
-                "平台：Linux（" & ModApp.RuntimeArch & "）" & vbCrLf &
+                "平台：" & ModPlatform.DisplayName & "（" & ModApp.RuntimeArch & "）" & vbCrLf &
                 "设备码：" & DeviceCode & vbCrLf &
                 New String("="c, 48) & vbCrLf &
                 If(detail, "")
@@ -104,7 +130,7 @@ Public Module ModSecret
     End Sub
 
     Public Sub ReportErrorToServer(detail As String, Optional kind As String = "错误")
-        ReportToServer("TYW Launcher Linux 匿名上报（" & kind & "）", If(detail, ""))
+        ReportToServer("TYW Launcher " & ModPlatform.DisplayName & " 匿名上报（" & kind & "）", If(detail, ""))
     End Sub
 
     Private Sub SavePendingReport(content As String)

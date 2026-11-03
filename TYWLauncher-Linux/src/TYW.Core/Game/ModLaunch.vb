@@ -84,7 +84,7 @@ Public Module ModLaunch
 
         ' --- natives ---
         report?.Invoke("解压运行库", 0.14)
-        Dim nativesDir = Path.Combine(verDir, "natives-linux")
+        Dim nativesDir = Path.Combine(verDir, ModPlatform.NativesDirName)
         ExtractNatives(merged, nativesDir)
 
         ' --- classpath ---
@@ -107,7 +107,7 @@ Public Module ModLaunch
             If File.Exists(ownJar) Then cpParts.Insert(0, ownJar)
         End If
         If cpParts.Count = 0 Then Throw New Exception("类路径为空，版本文件不完整，请重新下载该版本")
-        Dim classpath = String.Join(":", cpParts)
+        Dim classpath = String.Join(Path.PathSeparator.ToString(), cpParts)
 
         Dim assetsRoot = Path.Combine(ModPaths.McFolder, "assets")
         If Not Directory.Exists(assetsRoot) Then Directory.CreateDirectory(assetsRoot)
@@ -262,22 +262,26 @@ Public Module ModLaunch
 
 #Region "natives"
 
-    ''' <summary>这个库带的是当前平台的 native（返回 classifier key，否则空串）。</summary>
+    ''' <summary>这个库带的是当前平台+当前架构的 native（返回 classifier key，否则空串）。</summary>
     Private Function NativeKeyOf(libEl As JsonElement) As String
         Dim dls As JsonElement
         If libEl.TryGetProperty("downloads", dls) Then
             Dim cls As JsonElement
             If dls.TryGetProperty("classifiers", cls) Then
+                Dim keys As New List(Of String)
                 For Each c In cls.EnumerateObject()
-                    Dim k = c.Name.ToLowerInvariant()
-                    If k.Contains("linux") AndAlso Not k.Contains("arm") Then Return c.Name
+                    keys.Add(c.Name)
                 Next
+                Dim best = ModPlatform.BestClassifier(keys)
+                If best <> "" Then Return best
             End If
         End If
         Dim nk As JsonElement
         If libEl.TryGetProperty("natives", nk) Then
-            Dim lin As JsonElement
-            If nk.TryGetProperty("linux", lin) AndAlso lin.ValueKind = JsonValueKind.String Then Return lin.GetString()
+            'natives 段是 {"linux":"natives-linux","osx":"natives-macos"} 这种，按平台取
+            Dim platformKey = If(ModPlatform.IsMac, "osx", "linux")
+            Dim v As JsonElement
+            If nk.TryGetProperty(platformKey, v) AndAlso v.ValueKind = JsonValueKind.String Then Return v.GetString()
         End If
         Return ""
     End Function
@@ -300,14 +304,19 @@ Public Module ModLaunch
         If libEl.TryGetProperty("downloads", dls) Then
             Dim cls As JsonElement
             If dls.TryGetProperty("classifiers", cls) Then
+                Dim keys As New List(Of String)
                 For Each c In cls.EnumerateObject()
-                    Dim k = c.Name.ToLowerInvariant()
-                    If k.Contains("linux") AndAlso Not k.Contains("arm") Then
-                        Dim p = GetStr(c.Value, "path")
-                        If p = "" Then p = ModDownload.MavenToPath(GetStr(libEl, "name") & ":" & c.Name)
+                    keys.Add(c.Name)
+                Next
+                Dim best = ModPlatform.BestClassifier(keys)
+                If best <> "" Then
+                    Dim chosen As JsonElement
+                    If cls.TryGetProperty(best, chosen) Then
+                        Dim p = GetStr(chosen, "path")
+                        If p = "" Then p = ModDownload.MavenToPath(GetStr(libEl, "name") & ":" & best)
                         Return Path.Combine(ModPaths.McFolder, "libraries", p.Replace("/"c, Path.DirectorySeparatorChar))
                     End If
-                Next
+                End If
             End If
         End If
         Return ""
@@ -335,9 +344,15 @@ Public Module ModLaunch
                     For Each entry In z.Entries
                         If entry.FullName.EndsWith("/"c) Then Continue For
                         If entry.FullName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase) Then Continue For
-                        ' 排除其它平台的 .so
-                        If entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) OrElse
-                           entry.FullName.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase) Then Continue For
+                        ' 排除其它平台的动态库：Windows 的 .dll 一律不要；
+                        ' Linux 只要 .so，macOS 只要 .dylib
+                        Dim ext = Path.GetExtension(entry.FullName).ToLowerInvariant()
+                        If ext = ".dll" Then Continue For
+                        If ModPlatform.IsMac Then
+                            If ext <> ".dylib" AndAlso ext <> ".jnilib" Then Continue For
+                        Else
+                            If ext <> ".so" Then Continue For
+                        End If
                         Dim nameOnly = Path.GetFileName(entry.FullName)
                         If nameOnly = "" Then Continue For
                         Dim target = Path.Combine(nativesDir, nameOnly)
@@ -362,11 +377,15 @@ Public Module ModLaunch
         Dim ram = If(opt.MaxRamMb > 0, opt.MaxRamMb, 2048)
         list.Add("-Xmx" & ram & "M")
         list.Add("-Xms512M")
+        ' macOS：1.19+ 的 GLFW 必须在主线程初始化，这一项要排在最前面
+        If ModPlatform.NeedsStartOnFirstThread(If(merged.RootId, opt.VersionId)) Then
+            list.Add("-XstartOnFirstThread")
+        End If
         list.Add("-Dfile.encoding=UTF-8")
         list.Add("-Dstdout.encoding=UTF-8")
         list.Add("-Dstderr.encoding=UTF-8")
-        ' Wayland/HiDPI 下 LWJGL 的显示问题在部分机器上会白屏，交给运行时自动判断
-        list.Add("-Dorg.lwjgl.system.allocator=system")
+        ' Wayland/HiDPI 下 LWJGL 的显示问题在部分机器上会白屏（仅 Linux 需要）
+        If ModPlatform.IsLinux Then list.Add("-Dorg.lwjgl.system.allocator=system")
 
         Dim tokens = TokenTable(merged, opt, nativesDir, classpath, If(opt.GameDir, ModPaths.McFolder))
         Dim hasLibraryPath = False
@@ -510,11 +529,17 @@ Public Module ModLaunch
     Private Function SingleRuleMatches(rule As JsonElement) As Boolean
         Dim osEl As JsonElement
         If rule.TryGetProperty("os", osEl) Then
+            ' 版本 JSON 里 macOS 写作 osx；Linux 写作 linux
             Dim name = GetStr(osEl, "name")
-            If name <> "" AndAlso name <> "linux" Then Return False
+            Dim expectName = If(ModPlatform.IsMac, "osx", "linux")
+            If name <> "" AndAlso name <> expectName Then Return False
+
             Dim arch = GetStr(osEl, "arch")
-            If arch = "x86" Then Return False
-            If arch = "arm64" Then Return False
+            Select Case arch
+                Case "x86" : If ModPlatform.ArchName <> "x86" Then Return False
+                Case "x86_64" : If ModPlatform.ArchName <> "x64" Then Return False
+                Case "arm64", "aarch64" : If Not ModPlatform.IsArm64 Then Return False
+            End Select
         End If
 
         ' features：我们不是试玩用户、不用自定义分辨率、不用快速进入，

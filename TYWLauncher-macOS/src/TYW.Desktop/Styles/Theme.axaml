@@ -1,0 +1,39 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- 字体：优先 Windows 版同款，Linux 上回落到系统自带的思源黑体 -->
+  <FontFamily x:Key="PclFont">Microsoft YaHei UI, Noto Sans CJK SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif</FontFamily>
+
+  <!-- ================= 颜色表（与 Windows 版 Application.xaml 完全一致） ================= -->
+  <SolidColorBrush x:Key="ColorBrush1" Color="#343d4a" />
+  <SolidColorBrush x:Key="ColorBrush2" Color="#0b5bcb" />
+  <SolidColorBrush x:Key="ColorBrush3" Color="#1370f3" />
+  <SolidColorBrush x:Key="ColorBrush4" Color="#4890f5" />
+  <SolidColorBrush x:Key="ColorBrush5" Color="#96c0f9" />
+  <SolidColorBrush x:Key="ColorBrush6" Color="#d5e6fd" />
+  <SolidColorBrush x:Key="ColorBrush7" Color="#e0eafd" />
+  <SolidColorBrush x:Key="ColorBrush8" Color="#eaf2fe" />
+  <SolidColorBrush x:Key="ColorBrushBg0" Color="#96c0f9" />
+  <SolidColorBrush x:Key="ColorBrushBg1" Color="#bee0eafd" />
+
+  <SolidColorBrush x:Key="ColorBrushGray1" Color="#404040" />
+  <SolidColorBrush x:Key="ColorBrushGray2" Color="#737373" />
+  <SolidColorBrush x:Key="ColorBrushGray3" Color="#8c8c8c" />
+  <SolidColorBrush x:Key="ColorBrushGray4" Color="#a6a6a6" />
+  <SolidColorBrush x:Key="ColorBrushGray5" Color="#cccccc" />
+  <SolidColorBrush x:Key="ColorBrushGray6" Color="#ebebeb" />
+  <SolidColorBrush x:Key="ColorBrushGray7" Color="#f0f0f0" />
+  <SolidColorBrush x:Key="ColorBrushGray8" Color="#f5f5f5" />
+
+  <SolidColorBrush x:Key="ColorBrushRedBack" Color="#80fbdddd" />
+  <SolidColorBrush x:Key="ColorBrushRedLight" Color="#ff4c4c" />
+  <SolidColorBrush x:Key="ColorBrushRedDark" Color="#ce2111" />
+
+  <SolidColorBrush x:Key="ColorBrushHalfWhite" Color="#55ffffff" />
+  <SolidColorBrush x:Key="ColorBrushSemiWhite" Color="#bbffffff" />
+  <SolidColorBrush x:Key="ColorBrushWhite" Color="#ffffff" />
+  <SolidColorBrush x:Key="ColorBrushTransparent" Color="Transparent" />
+  <SolidColorBrush x:Key="ColorBrushSemiTransparent" Color="#01eaf2fe" />
+  <SolidColorBrush x:Key="ColorBrushBackgroundTransparentSidebar" Color="#F1FFFFFF" />
+
+</ResourceDictionary>

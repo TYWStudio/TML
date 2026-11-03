@@ -437,7 +437,7 @@ public static class SettingsPage
         var (card, stack) = NewCard("关于与更新");
 
         stack.Children.Add(Row("版本", Value(ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "）")));
-        stack.Children.Add(Row("运行环境", Value("Linux " + ModApp.RuntimeArch + " · .NET " +
+        stack.Children.Add(Row("运行环境", Value(ModPlatform.DisplayName + " " + ModApp.RuntimeArch + " · .NET " +
             Environment.Version.ToString(3))));
         stack.Children.Add(Row("数据目录", Value(ModPaths.Root)));
         stack.Children.Add(Row("设备码", CopyValue(ModSecret.DeviceCode)));
@@ -477,6 +477,21 @@ public static class SettingsPage
     {
         var (card, stack) = NewCard("版本通道");
         stack.Children.Add(Row("当前通道", Value(ModApp.ChannelDisplay + "（版本码 " + ModApp.VersionCode + "）")));
+
+        // macOS：三套通道是三个独立签名的 .app，启动器内不能自我替换
+        if (!ModPlatform.SupportsChannelSwitch)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = "macOS 版的正式版 / 快照版 / 内测版是三套独立签名的 .app，请在官网下载对应通道的安装包后替换，启动器内不支持自动切换。",
+                FontSize = 11.5,
+                FontFamily = Pcl.FontFamily,
+                Foreground = Pcl.Res("ColorBrushGray3"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0)
+            });
+            return card;
+        }
 
         var buttons = new StackPanel
         {
@@ -640,17 +655,7 @@ public static class SettingsPage
 
     private static void OpenFolder(string dir)
     {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", "\"" + dir + "\"")
-            {
-                UseShellExecute = false
-            });
-        }
-        catch (Exception ex)
-        {
-            ModLog.Err(ex, "打开目录");
-        }
+        SysShell.OpenFolder(dir);
     }
 
     private static long DirSize(string dir)

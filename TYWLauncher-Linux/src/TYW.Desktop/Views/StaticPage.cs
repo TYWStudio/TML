@@ -861,6 +861,20 @@ public static class StaticPage
         var owner = MainWin;
         if (owner == null) return;
         var detail = await Task.Run(() => ModServer.GetUpdateDetail());
+
+        // macOS 是签名的 .app，不能就地覆盖目录，改为提示 + 浏览器下载
+        if (!ModPlatform.SupportsSelfUpdate)
+        {
+            var macText = $"发现 TYW Launcher 新版本（版本码 {code}）。\n" +
+                          $"当前版本：{ModApp.VersionBaseName}（版本码 {ModApp.VersionCode}）\n\n" +
+                          (string.IsNullOrWhiteSpace(detail) ? "" : detail + "\n\n") +
+                          "macOS 版是签名的 .app 包，需要在浏览器里下载新版：解压后把旧的 TYW Launcher 从「应用程序」里拖走、" +
+                          "换上新版即可，游戏数据与设置不受影响。";
+            var macChoice = await PclMsgBox.Show(owner, "发现新版本", macText, "去下载", "取消");
+            if (macChoice == 0) SysShell.OpenUrl(url);
+            return;
+        }
+
         var text = $"发现 TYW Launcher 新版本（版本码 {code}）。\n" +
                    $"当前版本：{ModApp.VersionBaseName}（版本码 {ModApp.VersionCode}）\n\n" +
                    (string.IsNullOrWhiteSpace(detail) ? "" : detail + "\n\n") +
@@ -930,7 +944,7 @@ public static class StaticPage
                 break;
 
             default:
-                stack.Children.Add(Row("TYW Launcher", "Linux 版 " + ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "）"));
+                stack.Children.Add(Row("TYW Launcher", ModPlatform.DisplayName + " 版 " + ModApp.VersionBaseName + "（版本码 " + ModApp.VersionCode + "）"));
                 stack.Children.Add(Row("数据目录", ModPaths.Root));
                 stack.Children.Add(Row("日志目录", ModPaths.LogDir));
                 stack.Children.Add(SettingsPage.Row("设备码", SettingsPage.CopyValue(ModSecret.DeviceCode)));

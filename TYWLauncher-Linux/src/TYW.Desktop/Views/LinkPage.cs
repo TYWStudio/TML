@@ -54,6 +54,25 @@ public static class LinkPage
     {
         var host = new StackPanel { Spacing = 15 };
 
+        // macOS：EasyTier 建 TUN 必须 root，首版先不给入口，避免点了必然失败
+        if (!ModPlatform.SupportsLink)
+        {
+            var macCard = new PclCard { Title = "联机（macOS 暂未开放）", Margin = new Thickness(0) };
+            macCard.Body.Margin = new Thickness(15, 6, 15, 12);
+            macCard.Body.Children.Add(new TextBlock
+            {
+                Text = "macOS 上 EasyTier 需要创建 TUN 虚拟网卡，必须以管理员权限运行，" +
+                       "目前正在适配（后续版本开放，房间协议与 Windows / Linux 版互通）。\n\n" +
+                       "现在想在 macOS 上和朋友联机，可以先让朋友用 Windows / Linux 版开房间，你直接填服务器的直连地址进入。",
+                FontSize = 12.5,
+                FontFamily = Pcl.FontFamily,
+                Foreground = Pcl.Res("ColorBrushGray2"),
+                TextWrapping = TextWrapping.Wrap
+            });
+            host.Children.Add(macCard);
+            return host;
+        }
+
         host.Children.Add(Card("创建房间",
             "把你的单人世界或局域网服务器分享给朋友。\n创建后会生成邀请码，发给朋友即可加入。",
             "创建房间", () => OnCreate()));
