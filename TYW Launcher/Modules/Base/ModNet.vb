@@ -200,6 +200,8 @@ RequestFinished:
     ''' 服务端未升级或返回明文时行为与以前完全一致，不会因为加密改造而失效。
     ''' </summary>
     Public Function ServerRequest(Url As String, Optional Timeout As Integer = 15000, Optional Retry As Integer = 2) As String
+        '没配置服务端（开源版默认）时直接返回空，不发起请求，也不当成错误
+        If String.IsNullOrWhiteSpace(Url) OrElse Not Url.StartsWith("http", StringComparison.OrdinalIgnoreCase) Then Return ""
         Dim Last As Exception = Nothing
         For Attempt = 1 To If(Retry < 1, 1, Retry)
             Try

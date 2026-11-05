@@ -11,8 +11,58 @@ Friend Module ModSecret
     'CurseForge API Key
     Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "$2a$10$2fcSOPMyE/ckR48Gcw6/UOTsa0I0uW2jH5sr7zT.cQAVqPKUHnJtK")
     'TYW Launcher 自建服务端地址（公告 / 启动器更新下载，须以 / 结尾）
-    '★ 换服务器时只需要修改这一行 ★
-    Public Const ServerAddress As String = "http://Launcher.mc.tywmc.cn:17403/"
+    '
+    '★ 开源版默认留空 ★ 仓库里不带任何服务器地址，所有服务端功能（公告、自动更新、
+    '   内测码校验、封禁查询、匿名上报）在地址为空时自动关闭，启动器纯本地运行。
+    '
+    '想接到自己的服务端，任选一种（优先级从高到低）：
+    '   1) 设置里写 ServerUrl（启动器设置 → 启动器 → 服务端地址）
+    '   2) 环境变量 TYW_SERVER
+    '   3) 启动器目录或缓存目录下的 server.txt，内容就一行地址
+    '   4) 编译期常量（打包脚本用 TYW_SERVER_URL 注入）
+    Public ReadOnly Property ServerAddress As String
+        Get
+            If _serverAddress IsNot Nothing Then Return _serverAddress
+            _serverAddress = ResolveServerAddress()
+            Return _serverAddress
+        End Get
+    End Property
+    Private _serverAddress As String = Nothing
+
+    Private Function ResolveServerAddress() As String
+        Try
+            Dim custom As String = ""
+            Try
+                custom = Settings.Get(Of String)("ServerUrl")
+            Catch
+            End Try
+            If String.IsNullOrWhiteSpace(custom) Then custom = Environment.GetEnvironmentVariable("TYW_SERVER")
+            If String.IsNullOrWhiteSpace(custom) Then
+                For Each Candidate In {IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "server.txt"),
+                                       IO.Path.Combine(PathTemp, "server.txt")}
+                    Try
+                        If IO.File.Exists(Candidate) Then
+                            custom = IO.File.ReadAllText(Candidate).Trim()
+                            If custom <> "" Then Exit For
+                        End If
+                    Catch
+                    End Try
+                Next
+            End If
+            If String.IsNullOrWhiteSpace(custom) Then custom = BuiltInServerAddress
+            custom = If(custom, "").Trim()
+            If custom = "" Then Return ""
+            If Not custom.StartsWith("http", StringComparison.OrdinalIgnoreCase) Then custom = "http://" & custom
+            If Not custom.EndsWith("/") Then custom &= "/"
+            Return custom
+        Catch ex As Exception
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>编译期注入的默认地址。打包脚本（_deploy/build.py，环境变量 TYW_SERVER_URL）会替换这一行；
+    ''' 开源仓库里恒为空。</summary>
+    Public Const BuiltInServerAddress As String = ""
     '用于匿名数据收集的腾讯云日志服务上报 URL，形如 https://{region}.cls.tencentcs.com/track?topic_id={topic_id}
     Public Const ClsBaseUrl As String = ""
 
