@@ -59,12 +59,30 @@ jobs:
           file "/tmp/vfy/TYW Launcher.app/Contents/MacOS/TYWLauncher" | tee /tmp/vfy/arch.txt
           grep -q "$want" /tmp/vfy/arch.txt
 
+      - name: Verify dmg
+        working-directory: TYWLauncher-macOS
+        run: |
+          set -e
+          n=0
+          for d in dist/TYWLauncher-macos-*.dmg; do
+            [ -f "$d" ] || continue
+            echo "--- $d"
+            hdiutil verify "$d"
+            hdiutil attach -nobrowse -readonly -mountpoint /tmp/dm "$d" >/dev/null
+            test -d "/tmp/dm/TYW Launcher.app"
+            test -L "/tmp/dm/Applications"
+            hdiutil detach /tmp/dm >/dev/null
+            n=$((n+1))
+          done
+          test "$n" -eq 3
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TYWLauncher-macos-${{ matrix.arch }}
           path: |
             TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
+            TYWLauncher-macOS/dist/TYWLauncher-macos-*.dmg
             TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
           if-no-files-found: error
 
@@ -74,5 +92,6 @@ jobs:
         with:
           files: |
             TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
+            TYWLauncher-macOS/dist/TYWLauncher-macos-*.dmg
             TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
           generate_release_notes: true

@@ -6,9 +6,12 @@
 #   TYWLauncher-macos-arm64-snapshot.zip 快照版
 #   TYWLauncher-macos-arm64-beta.zip     内测版
 #   TYWLauncher-macos-x64*.zip           Intel 版（同上三通道）
+#   TYWLauncher-macos-*.dmg              同上六种，仅 macOS 上生成（hdiutil）
 #   SHA256SUMS-macos.txt
 #
 # zip 里是一个 "TYW Launcher.app"，解压后拖进「应用程序」即可。
+# dmg 里是 .app + Applications 快捷方式，双击挂载后直接把图标拖进去。
+# Windows / Linux 上交叉编译时没有 hdiutil，只出 zip，dmg 会自动跳过。
 #
 # 用法：
 #   ./packaging/build-macos.sh                 # 版本号取默认，双架构三通道全出
@@ -46,6 +49,31 @@ ok()  { printf '    \033[32m✓\033[0m %s\n' "$*"; }
 warn(){ printf '    \033[33m!\033[0m %s\n' "$*"; }
 
 [ -f "$ICNS" ] || "$PYTHON" "$ROOT/packaging/make_icns.py"
+
+# 官方发行包可以在这里注入服务端地址（开源仓库默认不带任何地址）：
+#   TYW_SERVER_URL=http://your-host:17403/ ./packaging/build-macos.sh 1.1.37
+# 只在构建期间修改源码，脚本退出时（含失败）自动还原，仓库里始终是空地址。
+SRV_FILE="$ROOT/src/TYW.Core/Base/ModServerUrl.vb"
+if [ -n "${TYW_SERVER_URL:-}" ]; then
+  SRV_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tyw-srv.XXXXXX")"
+  cp "$SRV_FILE" "$SRV_BACKUP"
+  trap 'cp "$SRV_BACKUP" "$SRV_FILE" 2>/dev/null; rm -f "$SRV_BACKUP"' EXIT
+  "$PYTHON" - "$SRV_FILE" "$TYW_SERVER_URL" <<'PY'
+import io, re, sys
+path, url = sys.argv[1], sys.argv[2].strip()
+if not url.endswith("/"):
+    url += "/"
+s = io.open(path, encoding="utf-8-sig", newline="").read()
+s2 = re.sub(r'(Public Const BuiltIn As String = )"[^"]*"', lambda m: m.group(1) + '"' + url + '"', s, count=1)
+if s2 == s:
+    raise SystemExit("找不到 BuiltIn 常量，注入失败")
+io.open(path, "w", encoding="utf-8-sig", newline="").write(s2)
+PY
+  [ $? -eq 0 ] || { echo "注入服务端地址失败" >&2; exit 1; }
+  ok "已注入服务端地址：$TYW_SERVER_URL"
+else
+  warn "未设置 TYW_SERVER_URL，产物为离线版（不带任何服务器地址）"
+fi
 
 mkdir -p "$DIST" "$STAGE"
 
@@ -111,15 +139,22 @@ for arch in "${ARCHES[@]}"; do
     name="TYWLauncher-macos-$arch$(suffix_of "$ch").zip"
     "$PYTHON" "$ROOT/packaging/zip_app.py" "$STAGE/$arch-$ch" "$DIST/$name" "$APPNAME.app" || exit 1
 
+    # dmg：只有 macOS 有 hdiutil，其它平台 make_dmg.sh 返回 2，静默跳过
+    dmgname="TYWLauncher-macos-$arch$(suffix_of "$ch").dmg"
+    bash "$ROOT/packaging/make_dmg.sh" "$STAGE/$arch-$ch" "$DIST/$dmgname" \
+        "$APPNAME.app" "$(display_of "$ch")" && ok "已生成 $dmgname"
+
     rm -rf "$STAGE/$arch-$ch"
   done
 done
 
 say "校验和"
+# 非 macOS 上不会生成 dmg，用 ls 过滤一遍，避免把未展开的通配符当文件名
+LIST="$( cd "$DIST" && ls TYWLauncher-macos-*.zip TYWLauncher-macos-*.dmg 2>/dev/null | sort )"
 if command -v sha256sum >/dev/null 2>&1; then
-  ( cd "$DIST" && sha256sum TYWLauncher-macos-*.zip > SHA256SUMS-macos.txt )
+  ( cd "$DIST" && sha256sum $LIST > SHA256SUMS-macos.txt )
 else
-  ( cd "$DIST" && shasum -a 256 TYWLauncher-macos-*.zip > SHA256SUMS-macos.txt )
+  ( cd "$DIST" && shasum -a 256 $LIST > SHA256SUMS-macos.txt )
 fi
 ok "$DIST/SHA256SUMS-macos.txt"
-ls -la "$DIST"/TYWLauncher-macos-*.zip
+ls -la "$DIST"/TYWLauncher-macos-*

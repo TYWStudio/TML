@@ -18,7 +18,8 @@ enum class Channel(val key: String, val display: String, val packageSuffix: Stri
 }
 
 object AppInfo {
-    const val SERVER_ADDRESS = BuildConfig.SERVER_ADDRESS
+    /** 当前生效的服务端地址，空字符串表示未配置（开源版默认，纯本地运行）。 */
+    val SERVER_ADDRESS: String get() = ServerUrl.current
     val buildChannel: Channel = Channel.fromKey(BuildConfig.CHANNEL)
     val versionName: String = BuildConfig.VERSION_NAME_CN
     val versionCode: Int = BuildConfig.VERSION_CODE_CN

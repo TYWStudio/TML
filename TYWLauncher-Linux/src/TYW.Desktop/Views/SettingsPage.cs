@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
@@ -43,6 +43,7 @@ public static class SettingsPage
             default:
                 host.Children.Add(SystemCard());
                 host.Children.Add(ChannelCard());
+                host.Children.Add(ServerCard());
                 break;
         }
         return host;
@@ -469,6 +470,74 @@ public static class SettingsPage
         buttons.Children.Add(btnCache);
 
         stack.Children.Add(buttons);
+        return card;
+    }
+
+    /// <summary>
+    /// 服务端地址：开源版默认不连任何服务器（公告 / 自动更新 / 内测码 / 上报全部关闭）。
+    /// 填自己的服务端地址后这些功能才会启用，也可以把地址写成程序目录下的 server.txt。
+    /// </summary>
+    private static Control ServerCard()
+    {
+        var (card, stack) = NewCard("服务端（可选）");
+        var current = ModNet.ServerAddress;
+        stack.Children.Add(Row("当前地址", Value(string.IsNullOrEmpty(current) ? "未配置，纯本地运行" : current)));
+
+        var box = new TextBox
+        {
+            Watermark = "http://你的服务器:17403/",
+            Text = ModSettings.GetString("ServerUrl", ""),
+            FontSize = 12.5,
+            FontFamily = Pcl.FontFamily,
+            Width = 300,
+            Height = 30,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        stack.Children.Add(box);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        var save = new PclButton { Text = "保存地址", Height = 30, Width = 100 };
+        save.Click += (_, _) =>
+        {
+            var url = (box.Text ?? "").Trim();
+            if (url.Length > 0 && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                url = "http://" + url;
+            if (url.Length > 0 && !url.EndsWith("/")) url += "/";
+            ModSettings.SetValue("ServerUrl", url);
+            ModSettings.Save();
+            ModServerUrl.Invalidate();
+            ModStartup.HintPublic(url.Length == 0 ? "已清空服务端地址，启动器转为纯本地运行。" : "服务端地址已保存：" + url, false);
+        };
+        buttons.Children.Add(save);
+
+        var clear = new PclButton { Text = "清空", Height = 30, Width = 76 };
+        clear.Click += (_, _) =>
+        {
+            box.Text = "";
+            ModSettings.SetValue("ServerUrl", "");
+            ModSettings.Save();
+            ModServerUrl.Invalidate();
+            ModStartup.HintPublic("已清空服务端地址，启动器转为纯本地运行。", false);
+        };
+        buttons.Children.Add(clear);
+        stack.Children.Add(buttons);
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "开源版不带任何服务器地址：不填就纯本地运行，公告、启动器更新、内测码校验、封禁查询、匿名上报全部关闭。\n" +
+                   "想接自己的服务端，填地址即可；也可以把地址写成程序目录或数据目录下的 server.txt（一行一个地址）。",
+            FontSize = 11.5,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrushGray3"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 0)
+        });
         return card;
     }
 

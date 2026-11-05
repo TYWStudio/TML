@@ -191,6 +191,43 @@ fun SettingsPage(
             }
         }
 
+        // ===== 服务端（可选） =====
+        TywCard("服务端（可选）") {
+            var urlInput by remember { mutableStateOf(Settings.getString("ServerUrl", "")) }
+            SettingRow("当前地址") {
+                ValueText(if (AppInfo.SERVER_ADDRESS.isEmpty()) "未配置，纯本地运行" else AppInfo.SERVER_ADDRESS)
+            }
+            OutlinedTextField(
+                value = urlInput,
+                onValueChange = { urlInput = it },
+                label = { Text("http://你的服务器:17403/", fontSize = 11.sp) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+            )
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TywButton("保存地址", highlight = true) {
+                    var url = urlInput.trim()
+                    if (url.isNotEmpty() && !url.startsWith("http", ignoreCase = true)) url = "http://$url"
+                    if (url.isNotEmpty() && !url.endsWith("/")) url += "/"
+                    Settings.setString("ServerUrl", url)
+                    ServerUrl.invalidate()
+                    Toast.makeText(
+                        context,
+                        if (url.isEmpty()) "已清空服务端地址，启动器转为纯本地运行" else "服务端地址已保存：$url",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                TywButton("清空") {
+                    urlInput = ""
+                    Settings.setString("ServerUrl", "")
+                    ServerUrl.invalidate()
+                    Toast.makeText(context, "已清空服务端地址，启动器转为纯本地运行", Toast.LENGTH_SHORT).show()
+                }
+            }
+            HintText("开源版不带任何服务器地址：不填就纯本地运行，公告、启动器更新、内测码校验、封禁查询、匿名上报全部关闭。四端接同一个服务端，地址格式与 Windows / Linux / macOS 版一致。")
+        }
+
         // ===== 关于与更新 =====
         TywCard("关于与更新") {
             SettingRow("版本") { ValueText("${AppInfo.versionName}（版本码 ${AppInfo.versionCode}）") }

@@ -110,7 +110,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            using var s = Avalonia.Platform.AssetLoader.Open(new Uri("avares://TYW.Desktop/Assets/appicon.png"));
+            using var s = Avalonia.Platform.AssetLoader.Open(new Uri("avares://TYWLauncher/Assets/appicon.png"));
             Icon = new WindowIcon(s);
         }
         catch (Exception ex)

@@ -1,4 +1,4 @@
-Imports System.Net
+﻿Imports System.Net
 Imports System.Net.Http
 
 ''' <summary>
@@ -6,7 +6,15 @@ Imports System.Net.Http
 ''' </summary>
 Public Module ModNet
 
-    Public ReadOnly ServerAddress As String = "http://Launcher.mc.tywmc.cn:17403/"
+    ''' <summary>
+    ''' 当前生效的服务端地址，空字符串表示未配置（开源版默认）。
+    ''' 见 ModServerUrl：设置 &gt; TYW_SERVER 环境变量 &gt; server.txt &gt; 编译期常量。
+    ''' </summary>
+    Public ReadOnly Property ServerAddress As String
+        Get
+            Return ModServerUrl.Current
+        End Get
+    End Property
 
     Private ReadOnly Client As HttpClient = CreateClient()
 
@@ -31,6 +39,8 @@ Public Module ModNet
 
     ''' <summary>请求服务端接口（自动带加密协商头），返回明文文本。失败返回 Nothing。</summary>
     Public Function GetServer(path As String, Optional timeoutSec As Integer = 12) As String
+        '未配置服务端时直接返回 Nothing，不发起请求，也不当成错误
+        If Not path.StartsWith("http", StringComparison.OrdinalIgnoreCase) AndAlso ServerAddress = "" Then Return Nothing
         Try
             Dim url = If(path.StartsWith("http"), path, ServerAddress & path.TrimStart("/"c))
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
@@ -54,6 +64,9 @@ Public Module ModNet
 
     ''' <summary>请求服务端文本，失败抛异常（供需要区分网络错误的调用方）。</summary>
     Public Function GetServerStrict(path As String, Optional timeoutSec As Integer = 12) As String
+        If Not path.StartsWith("http", StringComparison.OrdinalIgnoreCase) AndAlso ServerAddress = "" Then
+            Throw New Exception("未配置服务端地址（设置 → 启动器 → 服务端地址，或程序目录下的 server.txt）")
+        End If
         Dim url = If(path.StartsWith("http"), path, ServerAddress & path.TrimStart("/"c))
         Using req As New HttpRequestMessage(HttpMethod.Get, url)
             req.Headers.TryAddWithoutValidation("X-TYW-Enc", "1")

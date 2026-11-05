@@ -1,3 +1,12 @@
+/*
+ * 第三方代码声明 / Third-party notice
+ *
+ * 触控操作控件的数据模型、默认键位与编辑语义参考自 Fold Craft Launcher (FCL, GPL-3.0)：
+ *   https://github.com/FCL-Team/FoldCraftLauncher  →  ControlLayout
+ * 未复制 FCL 的任何源码，仅按相同的布局语义用 Kotlin 独立实现。
+ * 完整声明与范围说明见仓库根 THIRD-PARTY-NOTICES.md。
+ */
+
 package cn.tyw.launcher.core
 
 import org.json.JSONArray

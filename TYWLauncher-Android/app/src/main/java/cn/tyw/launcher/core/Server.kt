@@ -131,6 +131,8 @@ object Server {
     // ================= HTTP =================
 
     fun get(path: String, timeoutMs: Int = TIMEOUT_MS): String? {
+        // 未配置服务端时直接返回 null，不发起请求，也不当成错误
+        if (!path.startsWith("http", true) && AppInfo.SERVER_ADDRESS.isEmpty()) return null
         val url = if (path.startsWith("http", true)) path else AppInfo.SERVER_ADDRESS.trimEnd('/') + "/" + path.trimStart('/')
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = timeoutMs

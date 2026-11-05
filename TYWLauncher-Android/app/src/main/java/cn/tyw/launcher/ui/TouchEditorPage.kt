@@ -1,3 +1,13 @@
+/*
+ * 第三方代码声明 / Third-party notice
+ *
+ * 触控操作控件的编辑交互（拖动摆放、缩放、增删控件、导出 JSON）参考自
+ * Fold Craft Launcher (FCL, GPL-3.0)：
+ *   https://github.com/FCL-Team/FoldCraftLauncher  →  ControlLayout
+ * 未复制 FCL 的任何源码（Java / Kotlin 均未使用），仅按相同的布局语义用 Kotlin 独立实现。
+ * 完整声明与范围说明见仓库根 THIRD-PARTY-NOTICES.md 与 README 顶部声明。
+ */
+
 package cn.tyw.launcher.ui
 
 import androidx.compose.foundation.background
