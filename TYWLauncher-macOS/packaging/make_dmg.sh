@@ -46,13 +46,22 @@ mkdir -p "$(dirname "$OUT")"
 rm -f "$OUT"
 
 # -fs HFS+ 显式指定文件系统：默认在某些系统上会挑 APFS，APFS 卷在 10.13 以下打不开
-hdiutil create \
-    -volname "$VOLNAME" \
-    -srcfolder "$WORK" \
-    -fs HFS+ \
-    -format UDZO \
-    -ov \
-    "$OUT" >/dev/null || exit 1
+# CI 上偶发「Resource busy」（刚卸载的上一个镜像还没释放），重试几次即可
+for attempt in 1 2 3 4; do
+  if hdiutil create \
+      -volname "$VOLNAME" \
+      -srcfolder "$WORK" \
+      -fs HFS+ \
+      -format UDZO \
+      -ov \
+      "$OUT" >/dev/null 2>&1; then
+    echo "已生成 $OUT（第 $attempt 次）"
+    exit 0
+  fi
+  echo "hdiutil create 失败（第 $attempt 次），2 秒后重试" >&2
+  rm -f "$OUT"
+  sleep 2
+done
 
-echo "已生成 $OUT"
-exit 0
+echo "hdiutil create 连续失败，放弃：$OUT" >&2
+exit 1

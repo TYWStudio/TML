@@ -147,7 +147,14 @@ for arch in "${ARCHES[@]}"; do
     # dmg：只有 macOS 有 hdiutil，其它平台 make_dmg.sh 返回 2，静默跳过
     dmgname="TYWLauncher-macos-$arch$(suffix_of "$ch").dmg"
     bash "$ROOT/packaging/make_dmg.sh" "$STAGE/$arch-$ch" "$DIST/$dmgname" \
-        "$APPNAME.app" "$(display_of "$ch")" && ok "已生成 $dmgname"
+        "$APPNAME.app" "$(display_of "$ch")"
+    dmg_rc=$?
+    if [ "$dmg_rc" -eq 0 ]; then
+      ok "已生成 $dmgname"
+    elif [ "$dmg_rc" -ne 2 ]; then
+      echo "dmg 生成失败：$dmgname（返回 $dmg_rc）" >&2
+      exit 1
+    fi
 
     rm -rf "$STAGE/$arch-$ch"
   done
