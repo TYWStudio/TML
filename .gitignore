@@ -346,3 +346,7 @@ MaskFiles/
 # 本地应急构建产物备份（无 VS 时的编译变通方案）
 obj_backup_*/
 _deploy/
+
+# 本机发版用的服务端地址（不能提交，开源版必须保持无地址）
+TYWLauncher-macOS/packaging/server_url.txt
+TYWLauncher-Linux/packaging/server_url.txt

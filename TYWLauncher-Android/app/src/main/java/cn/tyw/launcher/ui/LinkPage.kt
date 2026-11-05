@@ -37,7 +37,10 @@ fun LinkPage() {
         }
         TywCard("当前节点") {
             Text(
-                "${AppInfo.SERVER_ADDRESS} 提供房间发现与公告，当前通道：${AppInfo.channel.display}",
+                if (AppInfo.SERVER_ADDRESS.isEmpty())
+                    "未配置服务端地址，房间发现与公告不可用（设置 → 服务端可填自己的地址）。当前通道：${AppInfo.channel.display}"
+                else
+                    "${AppInfo.SERVER_ADDRESS} 提供房间发现与公告，当前通道：${AppInfo.channel.display}",
                 fontSize = 12.sp,
                 color = p.textSub,
                 lineHeight = 18.sp

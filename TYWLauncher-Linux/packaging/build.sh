@@ -36,6 +36,19 @@ ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
 skip() { printf '    \033[33m-\033[0m 跳过 %s：%s\n' "$1" "$2"; }
 die()  { printf '\033[31m错误：%s\033[0m\n' "$*" >&2; exit 1; }
 
+# 官方发行包注入服务端地址（开源仓库默认不带任何地址）。
+# TYW_SERVER_URL 优先，其次 packaging/server_url.txt（本机发版用，不入仓库）。
+SRV_URL="${TYW_SERVER_URL:-}"
+if [ -z "$SRV_URL" ] && [ -f "$ROOT/packaging/server_url.txt" ]; then
+  SRV_URL="$(head -n 1 "$ROOT/packaging/server_url.txt" | tr -d '\r\n')"
+fi
+if [ -n "$SRV_URL" ]; then
+  for d in "$ROOT"/out/linux-*; do
+    [ -d "$d" ] && printf '%s\n' "$SRV_URL" > "$d/server.txt"
+  done
+  echo "已写入 server.txt：$SRV_URL"
+fi
+
 mkdir -p "$OUT"
 rm -rf "$WORK"
 mkdir -p "$WORK"

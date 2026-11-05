@@ -52,13 +52,18 @@ warn(){ printf '    \033[33m!\033[0m %s\n' "$*"; }
 
 # 官方发行包可以在这里注入服务端地址（开源仓库默认不带任何地址）：
 #   TYW_SERVER_URL=http://your-host:17403/ ./packaging/build-macos.sh 1.1.37
-# 只在构建期间修改源码，脚本退出时（含失败）自动还原，仓库里始终是空地址。
+# 没设环境变量时读 packaging/server_url.txt（本机发版用，不入仓库）；
+# 两者都没有 → 离线版。只在构建期间修改源码，脚本退出时（含失败）自动还原。
+SERVER_URL="${TYW_SERVER_URL:-}"
+if [ -z "$SERVER_URL" ] && [ -f "$ROOT/packaging/server_url.txt" ]; then
+  SERVER_URL="$(head -n 1 "$ROOT/packaging/server_url.txt" | tr -d '\r\n')"
+fi
 SRV_FILE="$ROOT/src/TYW.Core/Base/ModServerUrl.vb"
-if [ -n "${TYW_SERVER_URL:-}" ]; then
+if [ -n "$SERVER_URL" ]; then
   SRV_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tyw-srv.XXXXXX")"
   cp "$SRV_FILE" "$SRV_BACKUP"
   trap 'cp "$SRV_BACKUP" "$SRV_FILE" 2>/dev/null; rm -f "$SRV_BACKUP"' EXIT
-  "$PYTHON" - "$SRV_FILE" "$TYW_SERVER_URL" <<'PY'
+  "$PYTHON" - "$SRV_FILE" "$SERVER_URL" <<'PY'
 import io, re, sys
 path, url = sys.argv[1], sys.argv[2].strip()
 if not url.endswith("/"):
@@ -70,9 +75,9 @@ if s2 == s:
 io.open(path, "w", encoding="utf-8-sig", newline="").write(s2)
 PY
   [ $? -eq 0 ] || { echo "注入服务端地址失败" >&2; exit 1; }
-  ok "已注入服务端地址：$TYW_SERVER_URL"
+  ok "已注入服务端地址：$SERVER_URL"
 else
-  warn "未设置 TYW_SERVER_URL，产物为离线版（不带任何服务器地址）"
+  warn "未设置 TYW_SERVER_URL / server_url.txt，产物为离线版（不带任何服务器地址）"
 fi
 
 mkdir -p "$DIST" "$STAGE"
