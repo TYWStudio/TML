@@ -34,7 +34,7 @@ case "$CHANNEL" in
 esac
 
 [ -f "$PUBLISH_DIR/TYWLauncher" ] || { echo "publish 目录里没有 TYWLauncher：$PUBLISH_DIR" >&2; exit 1; }
-[ -f "$ICNS" ] || { echo "缺少图标 $ICNS（先跑 make_icns.py）" >&2; exit 1; }
+[ -f "$ICNS" ] || { echo "缺少图标 ${ICNS}（先跑 make_icns.py）" >&2; exit 1; }
 
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"

@@ -55,7 +55,7 @@ for attempt in 1 2 3 4; do
       -format UDZO \
       -ov \
       "$OUT" >/dev/null 2>&1; then
-    echo "已生成 $OUT（第 $attempt 次）"
+    echo "已生成 ${OUT}（第 $attempt 次）"
     exit 0
   fi
   echo "hdiutil create 失败（第 $attempt 次），2 秒后重试" >&2

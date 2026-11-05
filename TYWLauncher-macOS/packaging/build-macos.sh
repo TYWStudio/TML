@@ -96,7 +96,7 @@ for arch in "${ARCHES[@]}"; do
   case "$arch" in
     arm64) rid="osx-arm64" ;;
     x64)   rid="osx-x64" ;;
-    *) echo "未知架构：$arch（只支持 arm64 / x64）" >&2; exit 1 ;;
+    *) echo "未知架构：${arch}（只支持 arm64 / x64）" >&2; exit 1 ;;
   esac
 
   for ch in Release Snapshot Beta; do
@@ -152,7 +152,7 @@ for arch in "${ARCHES[@]}"; do
     if [ "$dmg_rc" -eq 0 ]; then
       ok "已生成 $dmgname"
     elif [ "$dmg_rc" -ne 2 ]; then
-      echo "dmg 生成失败：$dmgname（返回 $dmg_rc）" >&2
+      echo "dmg 生成失败：${dmgname}（返回 ${dmg_rc}）" >&2
       exit 1
     fi
 

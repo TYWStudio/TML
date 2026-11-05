@@ -372,7 +372,7 @@ build_appimage() { # $1=arch
 
 # ================================================================ 主流程
 for arch in "${ARCHES[@]}"; do
-  [ -f "$ROOT/out/linux-$arch/TYWLauncher" ] || die "缺少 out/linux-$arch，先执行 dotnet publish -r linux-$arch"
+  [ -f "$ROOT/out/linux-$arch/TYWLauncher" ] || die "缺少 out/linux-${arch}，先执行 dotnet publish -r linux-$arch"
   echo "[linux-$arch]"
   build_tarball "$arch"
   build_deb     "$arch"
