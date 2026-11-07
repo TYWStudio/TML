@@ -177,12 +177,25 @@ Public Module ModServer
                         If ch.TryGetProperty("VersionCode", el) Then code = el.GetInt32()
                         If ch.TryGetProperty("File", el) Then file = el.GetString()
                         If file = "" AndAlso ch.TryGetProperty("Url", el) Then file = el.GetString()
-                        ' macOS 一个通道有两个架构包：File 存 arm64，FileX64 存 Intel
+                        'macOS 一个通道有两个架构包：File 存 arm64，FileX64 存 Intel
                         If ModPlatform.IsMac AndAlso ModPlatform.ArchName = "x64" Then
                             If ch.TryGetProperty("FileX64", el) AndAlso el.ValueKind = JsonValueKind.String Then
                                 Dim x64File = el.GetString()
                                 If Not String.IsNullOrWhiteSpace(x64File) Then file = x64File
                             End If
+                        End If
+                        'Linux 同样分架构：File 存 x64（amd64），FileArm64 存 arm64（aarch64）
+                        If ModPlatform.IsLinux AndAlso ModPlatform.IsArm64 Then
+                            Dim armFile = ""
+                            If ch.TryGetProperty("FileArm64", el) AndAlso el.ValueKind = JsonValueKind.String Then
+                                armFile = el.GetString()
+                            End If
+                            '旧配置里没有 FileArm64：按命名规律把 File 里的 x64 换成 arm64，换不出来就当没有更新
+                            If String.IsNullOrWhiteSpace(armFile) AndAlso Not String.IsNullOrWhiteSpace(file) Then
+                                armFile = file.Replace("linux-x64", "linux-arm64")
+                                If armFile = file Then armFile = ""
+                            End If
+                            file = armFile
                         End If
                     End If
                 End If

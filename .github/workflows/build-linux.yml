@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      server_url:
+        description: '服务端地址（留空 = 离线版，填了才注入，产物名带 -server）'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -12,6 +17,14 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            rid: linux-x64
+          - arch: arm64
+            rid: linux-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,20 +40,23 @@ jobs:
           set -e
           for ch in Release Snapshot Beta; do
             dotnet publish TYW.Desktop/TYW.Desktop.csproj \
-              -c Release -r linux-x64 --self-contained true \
+              -c Release -r ${{ matrix.rid }} --self-contained true \
               -p:TYWChannel=$ch \
               -o "../out/ch-$ch"
           done
 
       - name: Package tar.gz
         working-directory: TYWLauncher-Linux
+        env:
+          TYW_SERVER_URL: ${{ github.event.inputs.server_url }}
         run: |
           set -e
           mkdir -p dist stage
+          ARCH=${{ matrix.arch }}
           declare -A NAME=(
-            [Release]="TYWLauncher-linux-x64.tar.gz"
-            [Snapshot]="TYWLauncher-linux-x64-snapshot.tar.gz"
-            [Beta]="TYWLauncher-linux-x64-beta.tar.gz"
+            [Release]="TYWLauncher-linux-${ARCH}.tar.gz"
+            [Snapshot]="TYWLauncher-linux-${ARCH}-snapshot.tar.gz"
+            [Beta]="TYWLauncher-linux-${ARCH}-beta.tar.gz"
           )
           DESKTOP='[Desktop Entry]\nType=Application\nName=TYW Launcher\nGenericName=Minecraft Launcher\nExec=tyw-launcher\nIcon=tyw-launcher\nCategories=Game;\n'
           WRAPPER='#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/TYWLauncher" "$@"\n'
@@ -52,19 +68,23 @@ jobs:
             printf "$DESKTOP" > "$stage/tyw-launcher.desktop"
             printf "$WRAPPER" > "$stage/tyw-launcher"
             chmod +x "$stage/tyw-launcher" "$stage/TYWLauncher"
+            # 官方发行包把服务端地址写进包内的 server.txt（开源/默认构建不写，纯离线）
+            if [ -n "${TYW_SERVER_URL:-}" ]; then
+              printf '%s\n' "$TYW_SERVER_URL" > "$stage/server.txt"
+            fi
             tar -C "stage/pkg-$ch" -czf "dist/${NAME[$ch]}" tyw-launcher-1.0.0
             rm -rf "stage/pkg-$ch"
           done
-          (cd dist && sha256sum TYWLauncher-linux-*.tar.gz > SHA256SUMS-linux-x64.txt)
+          (cd dist && sha256sum TYWLauncher-linux-*.tar.gz > SHA256SUMS-linux-${ARCH}.txt)
           ls -la dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TYWLauncher-linux-x64
+          name: TYWLauncher-linux-${{ matrix.arch }}${{ github.event.inputs.server_url != '' && '-server' || '' }}
           path: |
             TYWLauncher-Linux/dist/*.tar.gz
-            TYWLauncher-Linux/dist/SHA256SUMS-linux-x64.txt
+            TYWLauncher-Linux/dist/SHA256SUMS-linux-*.txt
           if-no-files-found: error
 
       - name: Release (on tag)
@@ -72,6 +92,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            TYWLauncher-Linux/dist/TYWLauncher-linux-*.tar.gz
-            TYWLauncher-Linux/dist/SHA256SUMS-linux-x64.txt
+            TYWLauncher-Linux/dist/*.tar.gz
+            TYWLauncher-Linux/dist/SHA256SUMS-linux-*.txt
           generate_release_notes: true

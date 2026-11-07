@@ -60,7 +60,8 @@ Public Module ModPlatform
             Case Else : suffix = ""
         End Select
         If IsMac Then Return "TYWLauncher-macos-" & ArchName & suffix & ".zip"
-        ' Linux 的历史包名不含架构（一直是 x64 名），保持不动，否则老客户端找不到更新
+        ' Linux：x64 保持历史包名（老客户端按这个名找更新），arm64 用 -arm64 前缀
+        If IsArm64 Then Return "TYWLauncher-linux-arm64" & suffix & ".tar.gz"
         Return "TYWLauncher-linux-x64" & suffix & ".tar.gz"
     End Function
 
