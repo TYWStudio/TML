@@ -537,15 +537,20 @@ Friend Module ModSecret
     Friend Sub DownloadLatestPCL(Optional LoaderToSyncProgress As LoaderBase = Nothing)
         Try
             If FileUtils.Exists(PathTemp & "Latest.exe") Then Return
-            Dim Task As New LoaderTask(Of Integer, Integer)("下载 TYW Launcher 正式版",
-                Sub(Loader As LoaderTask(Of Integer, Integer))
-                    Dim DlLoader As New LoaderDownload("下载 TYW Launcher 正式版",
-                        New List(Of NetFile) From {New NetFile({ServerAddress & "TYW Launcher.exe"}, PathTemp & "Latest.exe")})
-                    DlLoader.Start(Loader)
-                    DlLoader.WaitForExit()
-                End Sub)
-            Task.Start()
+            If String.IsNullOrWhiteSpace(ServerAddress) Then
+                Throw New Exception("未配置服务端地址（设置 → 启动器 → 服务端地址，或程序目录下的 server.txt）")
+            End If
+            '★ LoaderDownload.Start(Input) 会把入参强制转成 IEnumerable(Of NetFile)。
+            '   以前这里直接把外层的 LoaderTask(Of Integer, Integer) 传进去，
+            '   导出整合包时必定抛 InvalidCastException（"无法将 LoaderTask`2 强制转换为 IEnumerable`1[NetFile]"）。
+            '   与其它下载启动器的写法保持一致：用 LoaderCombo 包一层，不传 Input。
+            Dim DlLoader As New LoaderDownload("下载 TYW Launcher 正式版",
+                New List(Of NetFile) From {New NetFile({ServerAddress & "TYW Launcher.exe"}, PathTemp & "Latest.exe")})
+            Dim Task As New LoaderCombo(Of Integer)("下载 TYW Launcher 正式版", {DlLoader})
             Task.WaitForExit(, LoaderToSyncProgress)
+            If Task.State <> LoadState.Finished OrElse Not FileUtils.Exists(PathTemp & "Latest.exe") Then
+                Throw New Exception("下载未完成或未得到文件")
+            End If
         Catch ex As Exception
             Throw New Exception("从服务端下载 TYW Launcher 正式版失败（" & ServerAddress & "）：" & ex.Message, ex)
         End Try
@@ -702,11 +707,49 @@ Friend Module ModSecret
     End Sub
 
     ''' <summary>
+    ''' 上报用的平台描述，例如「Windows 11 专业版 24H2（24H2，build 26100，x64）」。
+    ''' .NET Framework 4.8 的 Environment.OSVersion 在 Win10+ 会报 6.2，所以读注册表。
+    ''' </summary>
+    Friend Function PlatformDisplay() As String
+        Dim Name As String = "Windows"
+        Dim Extra As New List(Of String)
+        Dim BuildNum As Integer = 0
+        Try
+            Using Key As Microsoft.Win32.RegistryKey =
+                Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+                If Key IsNot Nothing Then
+                    Dim Product = TryCast(Key.GetValue("ProductName"), String)
+                    Dim DisplayVersion = TryCast(Key.GetValue("DisplayVersion"), String)
+                    Dim Build = TryCast(Key.GetValue("CurrentBuild"), String)
+                    Integer.TryParse(If(Build, ""), BuildNum)
+                    If Not String.IsNullOrWhiteSpace(Product) Then
+                        'Win11 的注册表 ProductName 仍写着 Windows 10，用 build 号纠正
+                        If BuildNum >= 22000 AndAlso Product.StartsWith("Windows 10", StringComparison.OrdinalIgnoreCase) Then
+                            Product = "Windows 11" & Product.Substring("Windows 10".Length)
+                        End If
+                        Name = Product
+                    End If
+                    If Not String.IsNullOrWhiteSpace(DisplayVersion) Then Extra.Add(DisplayVersion)
+                End If
+            End Using
+        Catch
+        End Try
+        If BuildNum > 0 Then Extra.Add("build " & BuildNum)
+        Dim Arch As String = If(Environment.Is64BitOperatingSystem, "x64", "x86")
+        Try
+            If (Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") & "").Equals("ARM64", StringComparison.OrdinalIgnoreCase) Then Arch = "arm64"
+        Catch
+        End Try
+        Extra.Add(Arch)
+        Return Name & "（" & String.Join("，", Extra) & "）"
+    End Function
+
+    ''' <summary>
     ''' 错误自动上报（服务端存入 User-Errors）。全程自动，不需要用户手动操作。
     ''' 可在 设置-其他 中关闭（SystemErrorReport，默认开启）。
     ''' </summary>
     Friend Sub ReportErrorToServer(DetailText As String, Optional Kind As String = "错误")
-        ReportToServer("TYW Launcher 匿名上报（" & Kind & "）", If(DetailText, ""))
+        ReportToServer("TYW Launcher 匿名上报（" & Kind & "）｜" & PlatformDisplay(), If(DetailText, ""))
     End Sub
 
     ''' <summary>
@@ -717,8 +760,11 @@ Friend Module ModSecret
         Try
             If Not IgnoreSetting AndAlso Not Settings.Get(Of Boolean)("SystemErrorReport") Then Return
             If IsUpdateWaitingRestart Then Return
+            '没配置服务端（开源离线版）：不落盘、不发请求，避免缓存目录无限堆积
+            If String.IsNullOrWhiteSpace(ServerAddress) Then Return
             Dim Report As String =
                 Title & vbCrLf &
+                "平台：" & PlatformDisplay() & vbCrLf &
                 "时间：" & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") & vbCrLf &
                 "版本：" & VersionBaseName & "（版本码 " & VersionCode & "）" & vbCrLf &
                 "版本类型：" & BuildTypeDisplay & "（" & ChannelName & "通道）" & vbCrLf &

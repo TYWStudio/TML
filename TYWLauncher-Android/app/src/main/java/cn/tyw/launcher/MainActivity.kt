@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import cn.tyw.launcher.core.Clip
 import cn.tyw.launcher.core.JavaRuntime
+import cn.tyw.launcher.core.Report
 import cn.tyw.launcher.core.Settings
 import cn.tyw.launcher.ui.TywApp
 
@@ -18,6 +19,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Settings.init(applicationContext)
+        // 崩溃上报 + 上次没发出去的日志补发（必须在 Settings 之后）
+        Report.install(applicationContext)
         Clip.init(applicationContext)
         JavaRuntime.init(applicationContext)
         enableEdgeToEdge()

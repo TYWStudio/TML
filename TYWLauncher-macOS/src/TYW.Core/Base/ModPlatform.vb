@@ -21,6 +21,51 @@ Public Module ModPlatform
 
     Public ReadOnly Property IsArm64 As Boolean = (ArchName = "arm64")
 
+    ''' <summary>上报用的平台描述：Linux 带发行版（Ubuntu 22.04.4 LTS），macOS 带系统版本，都带架构。</summary>
+    Public ReadOnly Property PlatformDisplay As String
+        Get
+            Dim Extra As String = ""
+            Try
+                If IsLinux Then
+                    Extra = DetectLinuxDistro()
+                ElseIf IsMac Then
+                    Extra = DetectMacVersion()
+                End If
+            Catch
+            End Try
+            If String.IsNullOrWhiteSpace(Extra) Then Return DisplayName & "（" & ArchName & "）"
+            Return DisplayName & "（" & Extra & "，" & ArchName & "）"
+        End Get
+    End Property
+
+    ''' <summary>从 /etc/os-release 读发行版名（PRETTY_NAME），读不到返回空串。</summary>
+    Private Function DetectLinuxDistro() As String
+        Try
+            Const OsReleasePath As String = "/etc/os-release"
+            If Not File.Exists(OsReleasePath) Then Return ""
+            For Each Raw In File.ReadAllLines(OsReleasePath)
+                Dim Line = Raw.Trim()
+                If Line.StartsWith("PRETTY_NAME=", StringComparison.OrdinalIgnoreCase) Then
+                    Return Line.Substring(12).Trim().Trim(""""c, "'"c)
+                End If
+            Next
+        Catch
+        End Try
+        Return ""
+    End Function
+
+    ''' <summary>从 SystemVersion.plist 读 macOS 版本，读不到返回空串。</summary>
+    Private Function DetectMacVersion() As String
+        Try
+            Const PlistPath As String = "/System/Library/CoreServices/SystemVersion.plist"
+            If Not File.Exists(PlistPath) Then Return ""
+            Dim M = Regex.Match(File.ReadAllText(PlistPath), "<key>ProductVersion</key>\s*<string>([^<]+)</string>")
+            If M.Success Then Return M.Groups(1).Value.Trim()
+        Catch
+        End Try
+        Return ""
+    End Function
+
     ''' <summary>用户主目录。</summary>
     Public ReadOnly Property Home As String =
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)

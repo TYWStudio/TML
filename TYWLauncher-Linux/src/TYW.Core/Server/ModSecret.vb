@@ -114,11 +114,13 @@ Public Module ModSecret
     ''' </summary>
     Public Sub ReportToServer(title As String, detail As String)
         Try
+            '没配置服务端（开源离线版）：不落盘、不发请求，避免缓存目录无限堆积
+            If String.IsNullOrWhiteSpace(ModNet.ServerAddress) Then Return
             Dim report =
                 title & vbCrLf &
+                "平台：" & ModPlatform.PlatformDisplay & vbCrLf &
                 "时间：" & Date.Now.ToString("yyyy-MM-dd HH:mm:ss") & vbCrLf &
                 "版本：" & ModApp.VersionBaseName & "（版本码 " & ModApp.VersionCode & "）" & vbCrLf &
-                "平台：" & ModPlatform.DisplayName & "（" & ModApp.RuntimeArch & "）" & vbCrLf &
                 "设备码：" & DeviceCode & vbCrLf &
                 New String("="c, 48) & vbCrLf &
                 If(detail, "")
@@ -130,7 +132,7 @@ Public Module ModSecret
     End Sub
 
     Public Sub ReportErrorToServer(detail As String, Optional kind As String = "错误")
-        ReportToServer("TYW Launcher " & ModPlatform.DisplayName & " 匿名上报（" & kind & "）", If(detail, ""))
+        ReportToServer("TYW Launcher " & ModPlatform.PlatformDisplay & " 匿名上报（" & kind & "）", If(detail, ""))
     End Sub
 
     Private Sub SavePendingReport(content As String)
