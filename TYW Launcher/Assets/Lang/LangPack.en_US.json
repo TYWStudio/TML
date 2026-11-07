@@ -4144,5 +4144,18 @@
  "没有正版的话，请选择同版本号的 UWP 正式版（不带 GDK 标记）。": "If you do not own the game, pick the UWP release of the same version instead (the one without the GDK tag).",
  "确定要下载 GDK 版吗？": "Download the GDK build anyway?",
  "下载 GDK 版": "Download GDK Build",
- "继续下载": "Continue"
+ "继续下载": "Continue",
+ "拓展管理": "Extensions",
+ "拓展默认全部禁用。导入 .tmlext（Python / Node.js / C / Rust / Go）或 .jar（Java）扩展包后，需查看并确认其申请的权限，才会以独立子进程运行。扩展仅能使用经过审核的白名单能力，无法访问文件、网络、账号或启动器内部数据。": "Extensions are all disabled by default. Import a .tmlext (Python / Node.js / C / Rust / Go) or a .jar (Java) package, review the permissions it requests, and only then will it run in its own subprocess. An extension can only use the audited allow-list of capabilities — no access to files, network, accounts or launcher internals.",
+ "导入拓展": "Import",
+ "开发拓展": "Develop an Extension",
+ "拓展是独立子进程，只通过标准输入输出的 NDJSON 与启动器通信，任何能读写管道的语言都能写。下面六个仓库是官方模板：含 SDK、可运行的示例、打包脚本与 GitHub Actions 构建，克隆下来改一改就能用。协议文档见启动器仓库的 extensions/README.md。": "An extension is a separate process that talks to the launcher over NDJSON on stdin/stdout, so any language that can read and write a pipe will do. The six repositories below are the official templates — SDK, runnable example, packaging script and a GitHub Actions build; clone one and start editing. The protocol reference lives in extensions/README.md of the launcher repository.",
+ "Python 模板": "Python Template",
+ "Node.js 模板": "Node.js Template",
+ "Java 模板": "Java Template",
+ "C 模板": "C Template",
+ "Rust 模板": "Rust Template",
+ "Go 模板": "Go Template",
+ "原生语言（C / Rust / Go）的扩展会被直接当作可执行文件拉起，不套解释器；Python 与 Node.js 需要本机已安装对应运行环境，启动器不会自动下载任何运行时。": "Native extensions (C / Rust / Go) are launched directly as executables, with no interpreter in between; Python and Node.js need the matching runtime installed on this machine — the launcher never downloads a runtime.",
+ "暂无已安装的扩展。点击「导入拓展」选择 .tmlext 或 .jar 文件。": "No extensions installed yet. Click Import to pick a .tmlext or .jar file."
 }

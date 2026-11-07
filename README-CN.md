@@ -206,13 +206,30 @@ MeloongCore/              Git 子模块（Apache-2.0，https://github.com/Meloon
 
 TYW Launcher 提供**进程隔离、按需启用**的扩展接口，四个平台（Windows / Linux / macOS / Android）共用：
 
-- **Python 3**、**Node.js** 与 **C（原生）** 扩展使用 `.tmlext` 包（zip + `manifest.json`）。
+- **Python 3**、**Node.js**、**C**、**Rust**、**Go** 扩展使用 `.tmlext` 包（zip + `manifest.json`），
+  其中编译型语言直接携带原生可执行文件，由启动器直接拉起。
 - **Java** 扩展使用 `.jar` 包，作为独立 JVM 进程启动，绝不加载进启动器进程。
 
 扩展默认禁用，只有在用户审阅其权限列表后才可启用，会以 SHA-256 指纹标记（包内容变化会再次被禁用），
 且只能调用七项白名单：`log`、`toast`、`host.info`、`instances.list`、`events`、`storage`、`settings`。
 任意文件 / 进程 / 网络访问、凭据、令牌、设备代码、服务器地址、注册表、反射以及宿主内部**完全不暴露**，
 也不会下载或安装任何运行时。
+
+### 官方扩展模板
+
+六种语言各一个仓库，克隆下来改一改就能用。每个仓库都含 SDK、可运行的示例、打包脚本和 GitHub Actions
+构建，以及中英双语文档：
+
+| 运行时 | 模板仓库 |
+| --- | --- |
+| Python 3 | <https://github.com/TYWStudio/template-tml-extension-python> |
+| Node.js | <https://github.com/TYWStudio/template-tml-extension-node> |
+| Java | <https://github.com/TYWStudio/template-tml-extension-java> |
+| C | <https://github.com/TYWStudio/template-tml-extension-c> |
+| Rust | <https://github.com/TYWStudio/template-tml-extension-rust> |
+| Go | <https://github.com/TYWStudio/template-tml-extension-go> |
+
+启动器里也有同一组入口：**设置 → 其他 → 拓展 → 开发拓展**。
 
 完整协议、JSON 模式、SDK 与示例：[`extensions/README.md`](extensions/README.md)。
 安全模型及其边界：[`extensions/SECURITY.md`](extensions/SECURITY.md)。

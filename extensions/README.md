@@ -11,7 +11,7 @@
 
 ## 1. 两种包格式
 
-### 1.1 `.tmlext`（Python / Node.js）
+### 1.1 `.tmlext`（Python / Node.js / C / Rust / Go）
 
 一个 ZIP 压缩包（改后缀为 `.tmlext`），根目录必须有 `manifest.json`：
 
@@ -36,7 +36,7 @@
 | `format` | 固定 `tmlext` |
 | `apiVersion` | 固定 `1`，不匹配直接拒绝加载 |
 | `id` | 仅 `[a-z0-9._-]`，全局唯一，同时是私有目录名 |
-| `runtime` | `python3` 或 `node` |
+| `runtime` | `python3`、`node`，或原生运行时 `c` / `cpp` / `rust` / `go` / `native`（原生扩展的 `entry` 直接是可执行文件，宿主不套解释器） |
 | `entry` | 包内相对路径，禁止 `..`、绝对路径、`\`、盘符、符号链接 |
 | `platforms` | 允许运行的平台；当前平台不在其中则禁用 |
 | `permissions` | 见第 3 节，**只能出现白名单里的值，出现未知值直接拒绝加载** |
@@ -167,19 +167,20 @@ manifest 的 `permissions` 只能填下面这些；运行时调用未授权方�
    * 每扩展最多 1 个进程，宿主最多同时 8 个扩展进程；
    * 超时 / 崩溃 / 协议错误 → 结束进程并自动禁用，不影响启动器；
    * 找不到对应 runtime（`python3` / `node` / `java`）→ 显示「缺少运行时」并禁用，
-     **宿主绝不自动下载或安装运行时**。
+     **宿主绝不自动下载或安装运行时**；原生运行时（`c` / `rust` / `go` 等）不需要解释器，
+     但包内找不到 `entry` 指定的可执行文件同样拒绝启动。
 6. 用户可随时一键禁用；禁用会结束进程，但保留私有数据。
 
 ---
 
 ## 7. 四端一致性与差异
 
-| 平台 | 宿主实现 | python3 | node | java |
-| --- | --- | --- | --- | --- |
-| Windows | `TYW Launcher/Modules/Ext/*.vb` | `py -3` / `python` | `node` | `java` / `JAVA_HOME` |
-| Linux | `TYWLauncher-Linux/src/TYW.Core/Ext/ExtManager.vb` | `python3` | `node` | `java` |
-| macOS | `TYWLauncher-macOS/src/TYW.Core/Ext/ExtManager.vb` | `python3` | `node` | `java` |
-| Android | `…/cn/tyw/launcher/core/ext/ExtManager.kt` | 需设备 PATH 中已有 | 需设备 PATH 中已有 | 需设备 PATH 中已有 |
+| 平台 | 宿主实现 | python3 | node | java | c / rust / go |
+| --- | --- | --- | --- | --- | --- |
+| Windows | `TYW Launcher/Modules/Ext/*.vb` | `py -3` / `python` | `node` | `java` / `JAVA_HOME` | 直接执行包内二进制 |
+| Linux | `TYWLauncher-Linux/src/TYW.Core/Ext/ExtManager.vb` | `python3` | `node` | `java` | 直接执行包内二进制（自动补执行位） |
+| macOS | `TYWLauncher-macOS/src/TYW.Core/Ext/ExtManager.vb` | `python3` | `node` | `java` | 直接执行包内二进制（自动补执行位） |
+| Android | `…/cn/tyw/launcher/core/ext/ExtManager.kt` | 需设备 PATH 中已有 | 需设备 PATH 中已有 | 需设备 PATH 中已有 | 受系统限制，见下方说明 |
 
 协议、manifest、权限、事件、信任机制四端完全相同，**同一个扩展包四端通用**。
 Android 出于系统限制（应用不能执行自身数据目录下的二进制、也不允许动态加载 dex），
@@ -206,6 +207,20 @@ extensions/
 Python 与 Node 的 SDK 负责读 stdin、写 stdout、分发事件、发请求并等待响应；
 扩展作者只需写 `on_event` / 调 `Ext.log()` 之类的方法。Java SDK 同理，
 继承 `TMLExt` 覆写 `onEvent` 即可，主类由 SDK 提供 `main`。
+
+### 六种语言的官方模板仓库
+
+| 运行时 | 仓库 | 说明 |
+| --- | --- | --- |
+| Python 3 | <https://github.com/TYWStudio/template-tml-extension-python> | SDK + 示例 + 打包脚本 + CI |
+| Node.js | <https://github.com/TYWStudio/template-tml-extension-node> | SDK + 示例 + 打包脚本 + CI |
+| Java | <https://github.com/TYWStudio/template-tml-extension-java> | 独立 JVM 进程，SDK 基类 + 示例 |
+| C | <https://github.com/TYWStudio/template-tml-extension-c> | 零依赖原生可执行，gcc / clang / MSVC |
+| Rust | <https://github.com/TYWStudio/template-tml-extension-rust> | 仅标准库，cargo / rustc |
+| Go | <https://github.com/TYWStudio/template-tml-extension-go> | 仅标准库，静态二进制 |
+
+模板仓库都带 `build.sh` / `build.bat`（编译 + 打包成 `.tmlext`）、`manifest.json`、
+`tests/smoke.py`（模拟宿主跑一遍协议）与 GitHub Actions 构建，克隆即可开工。
 
 打包：
 

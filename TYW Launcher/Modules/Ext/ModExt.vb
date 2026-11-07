@@ -40,6 +40,19 @@ Public Module ModExt
         "game.exited", "instance.listChanged", "settings.changed"}
 
     ''' <summary>
+    ''' 原生运行时：宿主直接把包内二进制当作可执行文件拉起，不套任何解释器。
+    ''' C / C++ / Rust / Go 等编译型语言的产物都走这一条路径。
+    ''' </summary>
+    Friend ReadOnly NativeRuntimes As New HashSet(Of String) From {
+        "c", "cpp", "native", "rust", "go", "zig"}
+
+    ''' <summary>该 runtime 是否按原生可执行文件处理。</summary>
+    Public Function IsNativeRuntime(runtime As String) As Boolean
+        If String.IsNullOrEmpty(runtime) Then Return False
+        Return NativeRuntimes.Contains(runtime.Trim().ToLowerInvariant())
+    End Function
+
+    ''' <summary>
     ''' 硬编码黑名单：即使以后误加了新方法，这些方法名也永远返回 -32001。
     ''' 任意文件 / 进程 / 网络 / 凭据 / 提权 / 反射 / 宿主内部对象，一律不开放。
     ''' </summary>
@@ -464,8 +477,14 @@ Public Module ModExt
             Throw New ExtApiException(-32600, "entry 路径不合法")
         End If
         If info.Format = "tmlext" Then
-            If info.Runtime <> "python3" AndAlso info.Runtime <> "node" Then Throw New ExtApiException(-32600, "tmlext 只支持 python3 / node")
-            If Not Regex.IsMatch(info.Entry, "^[A-Za-z0-9._/\-]+\.(py|js|mjs|cjs)$") Then Throw New ExtApiException(-32600, "entry 必须是 .py / .js 文件")
+            If IsNativeRuntime(info.Runtime) Then
+                ' 原生扩展：entry 是包内的可执行文件（Windows 下宿主会自动补 .exe）
+                If Not Regex.IsMatch(info.Entry, "^[A-Za-z0-9._/\-]+$") Then Throw New ExtApiException(-32600, "原生扩展的 entry 必须是包内可执行文件路径")
+            ElseIf info.Runtime = "python3" OrElse info.Runtime = "node" Then
+                If Not Regex.IsMatch(info.Entry, "^[A-Za-z0-9._/\-]+\.(py|js|mjs|cjs)$") Then Throw New ExtApiException(-32600, "entry 必须是 .py / .js 文件")
+            Else
+                Throw New ExtApiException(-32600, "tmlext 只支持 python3 / node / c / rust / go")
+            End If
         Else
             If info.Runtime <> "java" Then Throw New ExtApiException(-32600, "jar 的 runtime 必须是 java")
             If Not Regex.IsMatch(info.Entry, "^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)+$") Then Throw New ExtApiException(-32600, "entry 必须是主类全名")

@@ -226,7 +226,8 @@ which game this launcher starts.
 TYW Launcher ships a **process-isolated, opt-in extension interface** shared by all four
 platforms (Windows / Linux / macOS / Android):
 
-- `.tmlext` packages (zip + `manifest.json`) for **Python 3**, **Node.js** and **C (native)** extensions.
+- `.tmlext` packages (zip + `manifest.json`) for **Python 3**, **Node.js**, **C**, **Rust** and **Go**
+  extensions — the compiled languages ship a native executable that the launcher starts directly.
 - `.jar` packages for **Java** extensions, started as a separate JVM process and never
   loaded into the launcher process.
 
@@ -236,6 +237,22 @@ and can call only a seven-item allowlist: `log`, `toast`, `host.info`, `instance
 `events`, `storage`, `settings`. Arbitrary file / process / network access, credentials,
 tokens, device codes, server addresses, registry, reflection and host internals are
 **not exposed at all**, and no runtime is ever downloaded or installed.
+
+### Official extension templates
+
+Six ready-to-clone repositories, one per language. Each contains the SDK, a runnable example,
+the packaging script and a GitHub Actions build, plus bilingual documentation:
+
+| Runtime | Template repository |
+| --- | --- |
+| Python 3 | <https://github.com/TYWStudio/template-tml-extension-python> |
+| Node.js | <https://github.com/TYWStudio/template-tml-extension-node> |
+| Java | <https://github.com/TYWStudio/template-tml-extension-java> |
+| C | <https://github.com/TYWStudio/template-tml-extension-c> |
+| Rust | <https://github.com/TYWStudio/template-tml-extension-rust> |
+| Go | <https://github.com/TYWStudio/template-tml-extension-go> |
+
+The same links are built into the launcher: **Settings → Other → Extensions → Develop an Extension**.
 
 Full protocol, JSON schema, SDKs and examples: [`extensions/README.md`](extensions/README.md).
 Security model and its limits: [`extensions/SECURITY.md`](extensions/SECURITY.md).

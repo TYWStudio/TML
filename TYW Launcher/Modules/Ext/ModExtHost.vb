@@ -47,7 +47,7 @@ Friend Class ExtHost
         Dim prefix As String = ""
         Dim args As String = ""
 
-        If Info.Runtime = "native" OrElse Info.Runtime = "c" Then
+        If ModExt.IsNativeRuntime(Info.Runtime) Then
             ' 原生可执行（C/C++/Rust/Go 等编译产物）：解压后直接拉起包内二进制，不套解释器
             args = ""
         Else
@@ -73,7 +73,7 @@ Friend Class ExtHost
             If Not entryPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) OrElse Not File.Exists(entryPath) Then
                 Throw New Exception("entry 不存在或越界：" & Info.Entry)
             End If
-            If Info.Runtime = "native" OrElse Info.Runtime = "c" Then
+            If ModExt.IsNativeRuntime(Info.Runtime) Then
                 ' Unix 下补执行位；Windows 下 .exe 自带
                 If Environment.OSVersion.Platform <> PlatformID.Win32NT Then
                     Try
