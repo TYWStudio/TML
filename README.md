@@ -6,6 +6,8 @@ launch the copy of the game they already own. No ads, no in-app purchases, no mo
 
 > NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
 
+This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+
 > ## ⚠️ Third-party code / 第三方代码声明（必读）
 >
 > 本项目的 **Android 触控操作控件**（屏幕摇杆、攻击 / 跳跃 / 潜行 / 物品栏 / 视角区按钮、布局编辑器）
