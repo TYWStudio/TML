@@ -1,3 +1,7 @@
+<p align="right">
+  <b>English</b> · <a href="README-CN.md">简体中文</a>
+</p>
+
 # TYW Launcher
 
 **TYW Launcher** is an open-source, free-of-charge **launcher for Minecraft: Java Edition** for Windows, derived from
@@ -8,20 +12,22 @@ launch the copy of the game they already own. No ads, no in-app purchases, no mo
 
 This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
 
-> ## ⚠️ Third-party code / 第三方代码声明（必读）
+> ## ⚠️ Third-party code notice (must read)
 >
-> 本项目的 **Android 触控操作控件**（屏幕摇杆、攻击 / 跳跃 / 潜行 / 物品栏 / 视角区按钮、布局编辑器）
-> **参考并复刻了 [Fold Craft Launcher (FCL)](https://github.com/FCL-Team/FoldCraftLauncher) 的 `ControlLayout` 设计**，
-> FCL 以 **GPL-3.0** 发布。
+> The **Android touch-control widgets** in this project (on-screen joystick, attack / jump / sneak /
+> inventory / view-area buttons, and the layout editor) **reference and re-implement the `ControlLayout`
+> design of [Fold Craft Launcher (FCL)](https://github.com/FCL-Team/FoldCraftLauncher)**, which is
+> released under **GPL-3.0**.
 >
-> 具体落在这些文件，**文件头都写了同样的声明**：
+> This applies to these files, whose headers carry the same notice:
 >
-> - `TYWLauncher-Android/app/src/main/java/cn/tyw/launcher/core/TouchLayout.kt` — 布局数据模型、默认键位
-> - `TYWLauncher-Android/app/src/main/java/cn/tyw/launcher/ui/TouchEditorPage.kt` — 控件拖动 / 缩放 / 增删 / 导出
+> - `TYWLauncher-Android/app/src/main/java/cn/tyw/launcher/core/TouchLayout.kt` — layout data model and default keymap
+> - `TYWLauncher-Android/app/src/main/java/cn/tyw/launcher/ui/TouchEditorPage.kt` — control drag / resize / add / remove / export
 >
-> 我们**没有复制 FCL 的任何 Java/Kotlin 源码**，只按相同的布局语义用 Kotlin 独立实现；FCL 的类名、包名、资源、图标
-> 均未引入。逐文件的范围与许可证说明见 **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**。
-> 本项目的 Windows 部分基于 **PCL2**（© LTCat / Meloong-Git），许可见 [`LICENCE`](LICENCE)。
+> We **did not copy any Java/Kotlin source from FCL**; the controls were implemented independently in
+> Kotlin following the same layout semantics, and FCL's class names, package names, resources and icons
+> were not introduced. Per-file scope and license details are in **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**.
+> The Windows part of this project is based on **PCL2** (© LTCat / Meloong-Git); see [`LICENCE`](LICENCE) for its license.
 
 - Source code (auditable): https://github.com/TYWStudio/TML
 - Issue tracker: https://github.com/TYWStudio/TML/issues
@@ -83,7 +89,7 @@ Point the launcher at your server in any of these ways (highest priority first):
 
 | How | Where | Notes |
 |---|---|---|
-| Launcher setting | Settings → **服务端（可选）** → address | Works on Windows / Linux / macOS / Android |
+| Launcher setting | Settings → **Server (optional)** → address | Works on Windows / Linux / macOS / Android |
 | Environment variable | `TYW_SERVER=http://your-host:17403/` | Handy for portable/CI use |
 | `server.txt` | next to the executable, or in the data directory | One line, just the URL |
 | Build-time | `TYW_SERVER_URL=... ` when packaging | Baked into the binary; see [Building](#building) |
@@ -115,7 +121,7 @@ same cards / rows / buttons, same palette engine), with the same server protocol
 - **Device code**: identical format to Windows — `XXXX-XXXX-XXXX-XXXX`, derived from a stable device fingerprint
   (MD5 of `ANDROID_ID|manufacturer|model|device|fingerprint`, first 16 hex chars, uppercased). Both the device code
   and the authorisation code have a one-tap **Copy** button, and tapping the value copies it too.
-- **Java management (list)**: Settings → Java 运行环境 → 管理 Java opens a dedicated page listing Java 8 / 11 / 16 /
+- **Java management (list)**: Settings → Java Runtime → Manage Java opens a dedicated page listing Java 8 / 11 / 16 /
   17 / 21 / 25. Every version can be downloaded or installed from a local archive (`zip` / `tar.gz`); installed
   runtimes can be set as default or removed. The auto-provisioning button first checks the requirement of the
   selected game version — `javaVersion.majorVersion` from the version JSON when present, otherwise derived from the
@@ -220,7 +226,7 @@ which game this launcher starts.
 TYW Launcher ships a **process-isolated, opt-in extension interface** shared by all four
 platforms (Windows / Linux / macOS / Android):
 
-- `.tmlext` packages (zip + `manifest.json`) for **Python 3** and **Node.js** extensions.
+- `.tmlext` packages (zip + `manifest.json`) for **Python 3**, **Node.js** and **C (native)** extensions.
 - `.jar` packages for **Java** extensions, started as a separate JVM process and never
   loaded into the launcher process.
 
