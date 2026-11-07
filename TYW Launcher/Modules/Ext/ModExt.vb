@@ -159,11 +159,144 @@ Public Module ModExt
         ModExt.LanguageProvider = languageProvider
     End Sub
 
+#Region "安装 / 卸载 / 启动初始化"
+
+    Private IsExtInit As Boolean = False
+
+    ''' <summary>在启动器启动时调用一次，注入真实宿主能力。重复调用安全。</summary>
+    Public Sub Init()
+        If IsExtInit Then Return
+        SyncLock LockObj
+            If IsExtInit Then Return
+            IsExtInit = True
+        End SyncLock
+        Configure(logCallback:=AddressOf DefaultLog,
+                  toastCallback:=AddressOf DefaultToast,
+                  hostInfoProvider:=AddressOf DefaultHostInfo,
+                  instancesProvider:=AddressOf DefaultInstances,
+                  settingsReader:=AddressOf DefaultSettingsGet,
+                  settingsWriter:=AddressOf DefaultSettingsSet,
+                  rootProvider:=AddressOf ExtRoot,
+                  versionProvider:=Function() VersionDisplay,
+                  channelProvider:=AddressOf DefaultChannel,
+                  languageProvider:=Function() System.Threading.Thread.CurrentThread.CurrentUICulture.Name)
+    End Sub
+
+    Private Sub DefaultLog(level As String, message As String)
+        Select Case level
+            Case "warn" : Logger.Log(message, LogLevel.Warn)
+            Case "error" : Logger.Log(message, LogLevel.Error)
+            Case Else : Logger.Log(message, LogLevel.Info)
+        End Select
+    End Sub
+
+    Private Sub DefaultToast(message As String)
+        Hint(message, HintType.Blue, False)
+    End Sub
+
+    Private Function DefaultHostInfo() As JObject
+        Dim o As New JObject()
+        o("platform") = PlatformName
+        o("arch") = If(System.Environment.Is64BitOperatingSystem, "x64", "x86")
+        o("launcherVersion") = VersionDisplay
+        o("channel") = DefaultChannel()
+        o("language") = System.Threading.Thread.CurrentThread.CurrentUICulture.Name
+        Return o
+    End Function
+
+    Private Function DefaultChannel() As String
+        Dim ch As String = BuildType.ToString().ToLower()
+        If ch = "debug" Then ch = "beta"
+        Return ch
+    End Function
+
+    Private Function DefaultInstances() As JArray
+        Dim arr As New JArray()
+        Try
+            For Each list In McInstanceList.Values
+                For Each inst In list
+                    Dim o As New JObject()
+                    o("id") = inst.Name
+                    o("name") = inst.Name
+                    Try
+                        If inst.Version IsNot Nothing Then o("gameVersion") = inst.Version.ToString()
+                    Catch : End Try
+                    o("loader") = ""
+                    arr.Add(o)
+                Next
+            Next
+        Catch ex As Exception
+            Log("warn", "枚举实例失败：" & ex.Message)
+        End Try
+        Return arr
+    End Function
+
+    Private Function DefaultSettingsGet(key As String) As Object
+        Return Settings.Get(Of String)(key)
+    End Function
+
+    Private Sub DefaultSettingsSet(key As String, value As Object)
+        Settings.Set(key, If(value Is Nothing, "", value.ToString()))
+    End Sub
+
+    ''' <summary>导入扩展包：先校验清单，再复制到扩展根目录，最后重新扫描。</summary>
+    Public Function Install(sourcePath As String) As ExtInfo
+        If String.IsNullOrEmpty(sourcePath) OrElse Not File.Exists(sourcePath) Then
+            Throw New ExtApiException(-32000, "扩展文件不存在")
+        End If
+        Dim ext As String = Path.GetExtension(sourcePath).ToLower()
+        If ext <> ".tmlext" AndAlso ext <> ".jar" Then
+            Throw New ExtApiException(-32000, "扩展文件必须是 .tmlext 或 .jar")
+        End If
+        Dim probe As ExtInfo = ParseOne(sourcePath, ExtRoot())
+        If probe.State = ExtState.Error Then
+            Throw New ExtApiException(-32600, "扩展清单无效：" & probe.ErrorMessage)
+        End If
+        Dim dest As String = Path.Combine(ExtRoot(), Path.GetFileName(sourcePath))
+        File.Copy(sourcePath, dest, True)
+        SyncLock LockObj
+            Scan()
+            If Extensions.TryGetValue(probe.Id, probe) Then Return probe
+        End SyncLock
+        Return probe
+    End Function
+
+    ''' <summary>卸载扩展：禁用、删除包文件、删除私有数据与信任记录。</summary>
+    Public Sub Uninstall(id As String)
+        Dim info As ExtInfo = GetInfo(id)
+        If info Is Nothing Then Return
+        Disable(id)
+        Try
+            If File.Exists(info.FilePath) Then File.Delete(info.FilePath)
+        Catch ex As Exception
+            Log("warn", "删除扩展文件失败：" & ex.Message)
+        End Try
+        Try
+            If Directory.Exists(info.PrivateDir) Then Directory.Delete(info.PrivateDir, True)
+        Catch
+        End Try
+        Dim root As String = ExtRoot()
+        Dim trusted As JObject = ReadTrusted(root)
+        If trusted.Property(id) IsNot Nothing Then
+            trusted.Remove(id)
+            WriteTrusted(root, trusted)
+        End If
+        SyncLock LockObj
+            Extensions.Remove(id)
+        End SyncLock
+    End Sub
+
+#End Region
+
     Private Function ExtRoot() As String
-        Dim root As String = If(RootProvider IsNot Nothing, RootProvider(),
-                                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions"))
+        Dim root As String = If(RootProvider IsNot Nothing, RootProvider(), "")
         If String.IsNullOrWhiteSpace(root) Then
-            root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions")
+            Try
+                ' 优先放到用户可写目录；不放在 exe 旁边（Program Files 下无写权限，且与二进制同目录不安全）
+                root = Path.Combine(Paths.AppDataThenName, "Extensions")
+            Catch
+                root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions")
+            End Try
         End If
         Try
             Directory.CreateDirectory(root)

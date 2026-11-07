@@ -9,6 +9,12 @@ Public Class Application
             '核心初始化
             MeloongCore.Main.Init("TYW Launcher")
             MeloongCore.Wpf.Main.Init()
+            '扩展系统初始化（仅注入宿主能力，不启动任何扩展进程；失败不影响启动）
+            Try
+                ModExt.Init()
+            Catch ex As Exception
+                Logger.Warn(ex, "扩展系统初始化失败")
+            End Try
             If Not (e.Args.Contains("--update") OrElse e.Args.Contains("--gpu") OrElse e.Args.Contains("--memory") OrElse e.Args.Contains("--deepmem")) Then '若是通过命令行调用，则不检查单例、不轮换日志（#9137）
                 WaitingMutex(e)
                 Logger.Instance = New PclLogger With {.logFolder = Paths.BaseThenName, .MinLevel = If(ModeDebug, LogLevel.Trace, LogLevel.Info)}

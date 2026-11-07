@@ -123,7 +123,7 @@ Public Class FormMain
         ApplicationStartTick = GetTimeMs()
         Handle = New WindowInteropHelper(Me).Handle
         '窗口标题：XAML（BAML）里的旧标题无法修改，这里在运行期统一覆盖为新品牌名
-        Title = "TYW Launcher"
+        Title = "TML Launcher"
         '读取设置
         UpdateBackgroundAndTitleBar()
         PageSetupUI.HiddenRefresh()
@@ -1175,6 +1175,7 @@ Public Class FormMain
         OtherHelp = 0
         OtherAbout = 1
         OtherTest = 2
+        OtherExt = 5
         InstanceOverall = 0
         InstanceSetup = 1
         InstanceModify = 2

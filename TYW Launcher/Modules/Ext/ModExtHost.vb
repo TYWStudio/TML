@@ -43,24 +43,51 @@ Friend Class ExtHost
 #Region "启动"
 
     Public Sub Start()
-        Dim runtime As String() = ModExt.FindRuntime(Info.Runtime)
-        If runtime Is Nothing Then
-            Throw New Exception("缺少运行时：" & Info.Runtime & "（宿主不会自动下载或安装）")
-        End If
-        Directory.CreateDirectory(Info.PrivateDir)
-        Dim exe As String = runtime(0)
-        Dim prefix As String = runtime(1)
+        Dim exe As String = ""
+        Dim prefix As String = ""
+        Dim args As String = ""
 
-        Dim args As String
+        If Info.Runtime = "native" OrElse Info.Runtime = "c" Then
+            ' 原生可执行（C/C++/Rust/Go 等编译产物）：解压后直接拉起包内二进制，不套解释器
+            args = ""
+        Else
+            Dim runtime As String() = ModExt.FindRuntime(Info.Runtime)
+            If runtime Is Nothing Then
+                Throw New Exception("缺少运行时：" & Info.Runtime & "（宿主不会自动下载或安装）")
+            End If
+            exe = runtime(0)
+            prefix = runtime(1)
+        End If
+
+        Directory.CreateDirectory(Info.PrivateDir)
+
         If Info.Format = "tmlext" Then
             Dim pkgDir As String = Info.PackageDir
             ExtractPackage(pkgDir)
             Dim entryPath As String = Path.GetFullPath(Path.Combine(pkgDir, Info.Entry.Replace("/"c, Path.DirectorySeparatorChar)))
+            If Not File.Exists(entryPath) AndAlso Environment.OSVersion.Platform = PlatformID.Win32NT Then
+                Dim tryExe As String = entryPath & ".exe"
+                If File.Exists(tryExe) Then entryPath = tryExe
+            End If
             Dim root As String = Path.GetFullPath(pkgDir) & Path.DirectorySeparatorChar
             If Not entryPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) OrElse Not File.Exists(entryPath) Then
                 Throw New Exception("entry 不存在或越界：" & Info.Entry)
             End If
-            args = prefix & """" & entryPath & """"
+            If Info.Runtime = "native" OrElse Info.Runtime = "c" Then
+                ' Unix 下补执行位；Windows 下 .exe 自带
+                If Environment.OSVersion.Platform <> PlatformID.Win32NT Then
+                    Try
+                        Dim chmodPsi As New ProcessStartInfo("chmod", "+x """ & entryPath & """") With {.UseShellExecute = False, .CreateNoWindow = True}
+                        Dim chmodProc As Process = Process.Start(chmodPsi)
+                        If chmodProc IsNot Nothing Then chmodProc.WaitForExit()
+                    Catch
+                    End Try
+                End If
+                exe = entryPath
+                args = ""
+            Else
+                args = prefix & """" & entryPath & """"
+            End If
         Else
             ' jar 不解压到宿主进程，直接交给独立 JVM；绝不 ClassLoader / 反射加载
             args = "-cp """ & Info.FilePath & """ " & Info.Entry
@@ -84,6 +111,16 @@ Friend Class ExtHost
             Dim value As String = Environment.GetEnvironmentVariable(key)
             If Not String.IsNullOrEmpty(value) Then psi.EnvironmentVariables(key) = value
         Next
+        ' 向扩展进程下发 TML 协议配置（宿主自身设置，非继承，安全）；所有运行时通用，方便 C 等原生扩展读取
+        psi.EnvironmentVariables("TML_EXT_ID") = Info.Id
+        psi.EnvironmentVariables("TML_EXT_API") = ModExt.ApiVersion.ToString()
+        psi.EnvironmentVariables("TML_EXT_PLATFORM") = ModExt.PlatformName
+        psi.EnvironmentVariables("TML_EXT_LAUNCHER_VERSION") = GetVersion()
+        psi.EnvironmentVariables("TML_EXT_CHANNEL") = GetChannel()
+        psi.EnvironmentVariables("TML_EXT_LANGUAGE") = Threading.Thread.CurrentThread.CurrentUICulture.Name
+        psi.EnvironmentVariables("TML_EXT_PRIVATE") = Info.PrivateDir
+        psi.EnvironmentVariables("TML_EXT_NONCE") = Nonce
+        psi.EnvironmentVariables("TML_EXT_PERMISSIONS") = String.Join(",", Info.Permissions)
         psi.EnvironmentVariables("PYTHONIOENCODING") = "utf-8"
         ' 以下变量即使存在于当前进程也绝不传递（可用来注入任意代码）
         For Each key As String In New String() {"NODE_OPTIONS", "PYTHONPATH", "PYTHONHOME",

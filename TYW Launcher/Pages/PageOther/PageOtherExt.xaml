@@ -1,0 +1,26 @@
+<local:MyPageRight
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:PCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    mc:Ignorable="d" x:Class="PageOtherExt"
+    PanScroll="PanBack" RenderOptions.BitmapScalingMode="LowQuality">
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+        <StackPanel x:Name="PanMain" Margin="25,10" Grid.IsSharedSizeScope="True">
+            <local:MyCard Margin="0,15" Title="拓展管理">
+                <Grid Margin="21,40,21,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="35" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Margin="0,0,0,12" TextWrapping="Wrap" LineHeight="19"
+                               Text="扩展默认全部禁用。导入 .tmlext（Python / Node.js）或 .jar（Java）扩展包后，需查看并确认其申请的权限，才会以独立子进程运行。扩展仅能使用经过审核的白名单能力，无法访问文件、网络、账号或启动器内部数据。" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal">
+                        <local:MyButton x:Name="BtnImport" Text="导入拓展" Width="160" Padding="13,0" Margin="0,0,15,0" ColorType="Highlight" />
+                        <local:MyButton x:Name="BtnRefresh" Text="刷新" Width="120" Padding="13,0" />
+                    </StackPanel>
+                </Grid>
+            </local:MyCard>
+            <StackPanel x:Name="PanExtList" />
+        </StackPanel>
+    </local:MyScrollViewer>
+</local:MyPageRight>
