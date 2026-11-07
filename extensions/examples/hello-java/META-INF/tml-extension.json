@@ -1,0 +1,14 @@
+{
+  "format": "jar",
+  "apiVersion": 1,
+  "id": "com.tyw.demo.hellojava",
+  "name": "Hello Java",
+  "version": "1.0.0",
+  "author": "TYW Studio",
+  "description": "TML Extension API v1 的 Java 示例（SDK 基类 + stdio 协议，不依赖第三方库）。",
+  "runtime": "java",
+  "entry": "cn.tyw.launcher.ext.demo.HelloJava",
+  "platforms": ["windows", "linux", "macos", "android"],
+  "permissions": ["log", "toast", "events", "instances.list"],
+  "subscribe": ["launcher.started", "game.launched"]
+}

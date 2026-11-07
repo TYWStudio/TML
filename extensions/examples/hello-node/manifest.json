@@ -1,0 +1,14 @@
+{
+  "format": "tmlext",
+  "apiVersion": 1,
+  "id": "com.tyw.demo.hellonode",
+  "name": "Hello Node",
+  "version": "1.0.0",
+  "author": "TYW Studio",
+  "description": "TML Extension API v1 的 Node.js 示例。",
+  "runtime": "node",
+  "entry": "main.js",
+  "platforms": ["windows", "linux", "macos", "android"],
+  "permissions": ["log", "toast", "events", "settings"],
+  "subscribe": ["launcher.started", "instance.listChanged"]
+}

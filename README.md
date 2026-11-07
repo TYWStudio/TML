@@ -212,3 +212,22 @@ NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR 
 This launcher is a community modification and is not affiliated with, endorsed by, or associated with Mojang or
 Microsoft. Minecraft is a trademark of Mojang Synergies AB. "Minecraft" is used here only descriptively, to indicate
 which game this launcher starts.
+
+## Extension API (TMLExt / jar)
+
+TYW Launcher ships a **process-isolated, opt-in extension interface** shared by all four
+platforms (Windows / Linux / macOS / Android):
+
+- `.tmlext` packages (zip + `manifest.json`) for **Python 3** and **Node.js** extensions.
+- `.jar` packages for **Java** extensions, started as a separate JVM process and never
+  loaded into the launcher process.
+
+Extensions are disabled by default, may only be enabled after the user reviews their
+permission list, are fingerprinted with SHA-256 (a changed package is disabled again),
+and can call only a seven-item allowlist: `log`, `toast`, `host.info`, `instances.list`,
+`events`, `storage`, `settings`. Arbitrary file / process / network access, credentials,
+tokens, device codes, server addresses, registry, reflection and host internals are
+**not exposed at all**, and no runtime is ever downloaded or installed.
+
+Full protocol, JSON schema, SDKs and examples: [`extensions/README.md`](extensions/README.md).
+Security model and its limits: [`extensions/SECURITY.md`](extensions/SECURITY.md).

@@ -1,0 +1,14 @@
+{
+  "format": "tmlext",
+  "apiVersion": 1,
+  "id": "com.tyw.demo.hellopython",
+  "name": "Hello Python",
+  "version": "1.0.0",
+  "author": "TYW Studio",
+  "description": "TML Extension API v1 的 Python 示例：订阅事件、写日志、显示提示、使用私有存储。",
+  "runtime": "python3",
+  "entry": "main.py",
+  "platforms": ["windows", "linux", "macos", "android"],
+  "permissions": ["log", "toast", "events", "storage", "host.info"],
+  "subscribe": ["launcher.started", "game.launched"]
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/TYWStudio/TML/main/extensions/schema/manifest.schema.json",
+  "title": "TML Extension manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "apiVersion", "id", "name", "version", "runtime", "entry", "platforms", "permissions"],
+  "properties": {
+    "format": { "enum": ["tmlext", "jar"] },
+    "apiVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$",
+      "maxLength": 64
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "version": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+){0,3}$", "maxLength": 24 },
+    "author": { "type": "string", "maxLength": 80 },
+    "description": { "type": "string", "maxLength": 500 },
+    "runtime": { "enum": ["python3", "node", "java"] },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?!.*\\.\\.)(?!.*\\\\)(?!.*:)(?!^/)[A-Za-z0-9._/\\-]+$"
+    },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["windows", "linux", "macos", "android"] }
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 7,
+      "items": {
+        "enum": ["log", "toast", "host.info", "instances.list", "events", "storage", "settings"]
+      }
+    },
+    "subscribe": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 7,
+      "items": {
+        "enum": [
+          "launcher.started", "launcher.shutdown", "game.launching", "game.launched",
+          "game.exited", "instance.listChanged", "settings.changed"
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "format": { "const": "tmlext" } }, "required": ["format"] },
+      "then": {
+        "properties": {
+          "runtime": { "enum": ["python3", "node"] },
+          "entry": { "pattern": "^[A-Za-z0-9._/\\-]+\\.(py|js|mjs|cjs)$" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "format": { "const": "jar" } }, "required": ["format"] },
+      "then": {
+        "properties": {
+          "runtime": { "const": "java" },
+          "entry": { "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)+$" }
+        }
+      }
+    }
+  ]
+}
