@@ -20,18 +20,12 @@
 #   TYW_SRC_DIR   发布产物目录（默认 out/linux-<arch>）。CI 里三通道分别发布到 out/ch-<通道>。
 #
 # 依赖（缺失的格式会自动跳过，不会中断）：
-#   dpkg-deb      deb        apt install dpkg
-#   rpmbuild      rpm        apt install rpm        / dnf install rpm-build
+#   dpkg-deb      deb         apt install dpkg
+#   rpmbuild      rpm         apt install rpm            / dnf install rpm-build
 #   zstd          pkg.tar.zst apt install zstd
-#   mksquashfs    AppImage 的备用打包路径
-#   appimagetool  AppImage  脚本会自动下载到 .tools/（也可自行放到 PATH），按目标架构下载
-#
-# 依赖（缺失的格式会自动跳过，不会中断）：
-#   dpkg-deb      deb        apt install dpkg
-#   rpmbuild      rpm        apt install rpm        / dnf install rpm-build
-#   zstd          pkg.tar.zst apt install zstd
-#   mksquashfs    AppImage 的备用打包路径
-#   appimagetool  AppImage  脚本会自动下载到 .tools/（也可自行放到 PATH）
+#   mksquashfs    AppImage 兜底路径   apt install squashfs-tools
+#   appimagetool  AppImage    脚本会自动下载到 .tools/（也可自行放进 PATH），按目标架构取
+#   runtime       AppImage    已内置在 packaging/runtime/（约 900KB/架构），不联网
 set -uo pipefail
 
 VER="${1:-1.0.0}"
@@ -358,7 +352,10 @@ fetch_file() {
 }
 
 fetch_runtime() { # $1=x86_64|aarch64 -> 打印 runtime 路径
-  local iarch="$1" dst="$TOOLS/runtime-$iarch"
+  local iarch="$1" dst="$TOOLS/runtime-$iarch" bundled
+  # 优先用仓库里自带的（packaging/runtime/，约 900KB），CI 和国内网络都不依赖下载
+  bundled="$ROOT/packaging/runtime/runtime-$iarch"
+  if [ -s "$bundled" ] && [ "$(stat -c%s "$bundled")" -gt 100000 ]; then echo "$bundled"; return 0; fi
   if [ -s "$dst" ] && [ "$(stat -c%s "$dst")" -gt 100000 ]; then echo "$dst"; return 0; fi
   # runtime 约 900KB
   fetch_file "$RT_BASE/runtime-$iarch" "$dst" 100000 >/dev/null || return 1
@@ -408,22 +405,41 @@ SHX
   echo "$appdir"
 }
 
+# 手工拼 AppImage：type2 = runtime ELF + 4KB 对齐 + squashfs。
+# appimagetool 拉不下来时用它兜底（只需要 mksquashfs，不需要联网）。
+make_appimage_raw() { # $1=AppDir $2=runtime $3=输出
+  command -v mksquashfs >/dev/null || return 1
+  local appdir="$1" rt="$2" out="$3" sq elf pad
+  sq="$WORK/sq-$(basename "$out").squashfs"
+  rm -f "$sq" "$out"
+  mksquashfs "$appdir" "$sq" -root-owned -noappend -comp gzip -quiet >/dev/null 2>&1 || {
+    rm -f "$sq"; return 1; }
+  elf=$(stat -c%s "$rt")
+  pad=$(( (4096 - elf % 4096) % 4096 ))
+  { cat "$rt"; head -c "$pad" /dev/zero; cat "$sq"; } > "$out" || { rm -f "$sq" "$out"; return 1; }
+  rm -f "$sq"
+  chmod +x "$out"
+  [ -s "$out" ]
+}
+
 build_appimage() { # $1=arch
   local arch="$1" iarch; iarch="$(appimg_arch "$arch")"
-  local tool rt
-  tool="$(ensure_appimagetool "$iarch")" || { skip AppImage "没有 ${iarch} 版 appimagetool 且下载失败"; return 0; }
+  local tool rt appdir out
   rt="$(fetch_runtime "$iarch")" || { skip AppImage "type2 runtime 下载失败（离线？）"; return 0; }
-  local appdir out
   appdir="$(make_appdir "$arch")"
   out="$OUT/${APPNAME// /_}-${VER}${CH_SUF}-${iarch}.AppImage"
-  # appimagetool 自带联网下载 runtime，国内基本不通，这里显式指定
-  if ARCH="$iarch" "$tool" --no-appstream --runtime-file "$rt" "$appdir" "$out" \
+
+  tool="$(ensure_appimagetool "$iarch")" || tool=""
+  if [ -n "$tool" ] && ARCH="$iarch" "$tool" --no-appstream --runtime-file "$rt" "$appdir" "$out" \
        >"$WORK/appimage-$arch.log" 2>&1 && [ -s "$out" ]; then
     chmod +x "$out"
     ok "$(basename "$out")  $(du -h "$out" | cut -f1)"
+  elif make_appimage_raw "$appdir" "$rt" "$out"; then
+    # appimagetool 不可用时的兜底路径，产物结构一致（type2 runtime + squashfs）
+    ok "$(basename "$out")  $(du -h "$out" | cut -f1)  (mksquashfs 直拼)"
   else
     rm -f "$out"
-    skip AppImage "appimagetool 失败，日志：$WORK/appimage-$arch.log"
+    skip AppImage "appimagetool 与 mksquashfs 都不可用"
   fi
   rm -rf "$appdir"
 }

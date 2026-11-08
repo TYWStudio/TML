@@ -66,26 +66,9 @@ jobs:
             echo "::endgroup::"
           done
 
-      # AppImage 的 runtime 只是个 900KB 的 ELF，脚本里自带下载重试；
-      # 这里先抢一份放到 .tools/，打包阶段就不用再走网络（CI 上偶发拉不下来）
-      - name: Pre-fetch AppImage runtime
-        working-directory: TYWLauncher-Linux
-        run: |
-          set -e
-          case "${{ matrix.arch }}" in
-            x64) ia=x86_64 ;;
-            arm64) ia=aarch64 ;;
-          esac
-          mkdir -p .tools
-          url="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$ia"
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --connect-timeout 20 \
-               --max-time 240 -o ".tools/runtime-$ia" "$url"
-          test "$(stat -c%s ".tools/runtime-$ia")" -gt 100000
-          chmod +x ".tools/runtime-$ia"
-          ls -l .tools
-
       # 一次出全部 5 种包：tar.gz / deb / rpm / pkg.tar.zst / AppImage
       # 版本号直接从源码取（ModApp.vb 的 Release 分支），避免和客户端对不上
+      # AppImage 的 runtime 已内置在 packaging/runtime/，不需要联网下载
       - name: Package all formats
         working-directory: TYWLauncher-Linux
         run: |
@@ -119,6 +102,39 @@ jobs:
           done
           cp dist/SHA256SUMS "dist/SHA256SUMS-linux-${{ matrix.arch }}.txt"
           rm -f dist/SHA256SUMS
+
+      # 逐种格式验证包是真能用的：deb 读控制段、rpm 读头、zst 读 .PKGINFO、
+      # AppImage 解包看 AppRun 与主程序、tar.gz 看主程序在不在
+      - name: Verify packages
+        working-directory: TYWLauncher-Linux
+        run: |
+          set -e
+          for f in dist/*.deb; do
+            echo "--- $f"
+            dpkg-deb -f "$f" Package Version Architecture
+          done
+          for f in dist/*.rpm; do
+            echo "--- $f"
+            rpm -qp --nosignature --qf '%{NAME} %{VERSION} %{RELEASE} %{ARCH}\n' "$f"
+          done
+          for f in dist/*.pkg.tar.zst; do
+            echo "--- $f"
+            zstd -dc "$f" | tar -xO .PKGINFO | grep -E '^(pkgname|pkgver|arch) '
+          done
+          for f in dist/*.tar.gz; do
+            echo "--- $f"
+            tar -tzf "$f" | grep -q '/TYWLauncher$'
+          done
+          for f in dist/*.AppImage; do
+            echo "--- $f"
+            app="$PWD/$f"
+            rm -rf /tmp/ax && mkdir -p /tmp/ax
+            ( cd /tmp/ax && "$app" --appimage-extract >/dev/null )
+            test -x /tmp/ax/squashfs-root/AppRun
+            test -f /tmp/ax/squashfs-root/usr/bin/TYWLauncher
+            grep -q 'TYW_APPIMAGE=1' /tmp/ax/squashfs-root/AppRun
+          done
+          echo "全部格式校验通过"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
