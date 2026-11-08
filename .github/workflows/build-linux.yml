@@ -66,6 +66,24 @@ jobs:
             echo "::endgroup::"
           done
 
+      # AppImage 的 runtime 只是个 900KB 的 ELF，脚本里自带下载重试；
+      # 这里先抢一份放到 .tools/，打包阶段就不用再走网络（CI 上偶发拉不下来）
+      - name: Pre-fetch AppImage runtime
+        working-directory: TYWLauncher-Linux
+        run: |
+          set -e
+          case "${{ matrix.arch }}" in
+            x64) ia=x86_64 ;;
+            arm64) ia=aarch64 ;;
+          esac
+          mkdir -p .tools
+          url="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$ia"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --connect-timeout 20 \
+               --max-time 240 -o ".tools/runtime-$ia" "$url"
+          test "$(stat -c%s ".tools/runtime-$ia")" -gt 100000
+          chmod +x ".tools/runtime-$ia"
+          ls -l .tools
+
       # 一次出全部 5 种包：tar.gz / deb / rpm / pkg.tar.zst / AppImage
       # 版本号直接从源码取（ModApp.vb 的 Release 分支），避免和客户端对不上
       - name: Package all formats

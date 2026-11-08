@@ -325,53 +325,66 @@ build_pacman() { # $1=arch
 # AppImage = type2-runtime（约 900KB 的 ELF）+ 追加的 squashfs。
 # 用 appimagetool 生成；runtime 从 type2-runtime 仓库取（国内走加速镜像）。
 RT_BASE="https://github.com/AppImage/type2-runtime/releases/download/continuous"
+AIT_BASE="https://github.com/AppImage/appimagetool/releases/download/continuous"
+
+# 通用下载：curl 优先（带重试、跟随跳转），没有 curl 才用 wget。
+# GitHub 的 release 资源会 302 到 objects.githubusercontent.com，走 wget 偶尔会
+# 在 CI 里直接失败，所以这里多轮重试 + 镜像轮换，并且按大小校验。
+#   $1=url  $2=输出文件  $3=最小字节数
+fetch_file() {
+  local url="$1" out="$2" minsize="$3" i p size
+  local mirrors=("" "https://ghproxy.net/" "https://gh-proxy.com/" "https://ghfast.top/")
+  mkdir -p "$(dirname "$out")"
+  for i in 1 2 3; do
+    for p in "${mirrors[@]}"; do
+      rm -f "$out.part"
+      if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --retry 2 --retry-delay 2 --connect-timeout 20 --max-time 240 \
+             -o "$out.part" "$p$url" >/dev/null 2>&1
+      elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 90 -t 2 -O "$out.part" "$p$url" >/dev/null 2>&1
+      else
+        return 1
+      fi
+      size=$(stat -c%s "$out.part" 2>/dev/null || echo 0)
+      if [ "$size" -ge "$minsize" ]; then
+        mv "$out.part" "$out"; echo "$size"; return 0
+      fi
+    done
+    [ "$i" -lt 3 ] && sleep 3
+  done
+  rm -f "$out.part"
+  return 1
+}
 
 fetch_runtime() { # $1=x86_64|aarch64 -> 打印 runtime 路径
   local iarch="$1" dst="$TOOLS/runtime-$iarch"
   if [ -s "$dst" ] && [ "$(stat -c%s "$dst")" -gt 100000 ]; then echo "$dst"; return 0; fi
-  command -v wget >/dev/null || return 1
-  mkdir -p "$TOOLS"
-  local mirrors=("" "https://ghproxy.net/" "https://gh-proxy.com/" "https://ghfast.top/")
-  local p
-  for p in "${mirrors[@]}"; do
-    rm -f "$dst.part"
-    if wget -q -T 45 -t 2 -O "$dst.part" "$p$RT_BASE/runtime-$iarch" \
-         && [ "$(stat -c%s "$dst.part" 2>/dev/null || echo 0)" -gt 100000 ]; then
-      mv "$dst.part" "$dst"; chmod +x "$dst"; echo "$dst"; return 0
-    fi
-  done
-  rm -f "$dst.part"
-  return 1
+  # runtime 约 900KB
+  fetch_file "$RT_BASE/runtime-$iarch" "$dst" 100000 >/dev/null || return 1
+  chmod +x "$dst"
+  echo "$dst"
 }
 
 ensure_appimagetool() { # $1=x86_64|aarch64 -> 打印 appimagetool 入口
   command -v appimagetool >/dev/null && { command -v appimagetool; return 0; }
-  local iarch="$1" home
+  local iarch="$1" home ai
   home="$TOOLS/appimagetool-$iarch"
   [ -x "$home/AppRun" ] && { echo "$home/AppRun"; return 0; }
-  command -v wget >/dev/null || return 1
-  mkdir -p "$TOOLS"
-  # 按目标架构取工具：arm64 runner 上跑 x86_64 的 AppImage 需要 binfmt，直接取 aarch64 版
-  local url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${iarch}.AppImage"
-  local mirrors=("" "https://ghproxy.net/" "https://gh-proxy.com/" "https://ghfast.top/")
-  local p
-  for p in "${mirrors[@]}"; do
-    rm -rf "$TOOLS/squashfs-root"
-    rm -f "$TOOLS/ai-$iarch.AppImage"
-    # appimagetool 约 15MB，低于 1MB 视为失败
-    if wget -q -T 90 -t 2 -O "$TOOLS/ai-$iarch.AppImage" "$p$url" \
-         && [ "$(stat -c%s "$TOOLS/ai-$iarch.AppImage" 2>/dev/null || echo 0)" -gt 1000000 ]; then
-      chmod +x "$TOOLS/ai-$iarch.AppImage"
-      if ( cd "$TOOLS" && "./ai-$iarch.AppImage" --appimage-extract >/dev/null 2>&1 ) \
-           && [ -x "$TOOLS/squashfs-root/AppRun" ]; then
-        rm -rf "$home"
-        mv "$TOOLS/squashfs-root" "$home"
-        rm -f "$TOOLS/ai-$iarch.AppImage"
-        echo "$home/AppRun"; return 0
-      fi
-    fi
-  done
-  rm -f "$TOOLS/ai-$iarch.AppImage"
+  ai="$TOOLS/ai-$iarch.AppImage"
+  # 按目标架构取工具：arm64 上跑 x86_64 的 AppImage 需要 binfmt，直接取 aarch64 版
+  # appimagetool 约 15MB，低于 1MB 视为失败
+  fetch_file "$AIT_BASE/appimagetool-${iarch}.AppImage" "$ai" 1000000 >/dev/null || { rm -f "$ai"; return 1; }
+  chmod +x "$ai"
+  rm -rf "$TOOLS/squashfs-root"
+  if ( cd "$TOOLS" && "./ai-$iarch.AppImage" --appimage-extract >/dev/null 2>&1 ) \
+       && [ -x "$TOOLS/squashfs-root/AppRun" ]; then
+    rm -rf "$home"
+    mv "$TOOLS/squashfs-root" "$home"
+    rm -f "$ai"
+    echo "$home/AppRun"; return 0
+  fi
+  rm -f "$ai"
   return 1
 }
 
