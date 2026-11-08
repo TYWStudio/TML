@@ -352,6 +352,7 @@ TYWLauncher-macOS/packaging/server_url.txt
 TYWLauncher-Linux/packaging/server_url.txt
 
 # ---- TML 扩展示例的编译产物（各自平台现编，不入库）----
+/target/
 extensions/examples/hello-go/bin/
 extensions/examples/hello-rust/target/
 extensions/examples/hello-go.tmlext

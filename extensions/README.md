@@ -209,7 +209,7 @@ extensions/
 └── pack.py                      把示例目录打成 .tmlext / .jar 并输出 SHA-256
 ```
 
-**Go / Rust 的接入代码就在本仓库里**，不依赖任何独立模板仓库：
+**Go / Rust 的接入代码（SDK）就在本仓库里**，模板仓库只是引用它，不复制：
 
 | 语言 | SDK | 示例 | 打包 |
 | --- | --- | --- | --- |
@@ -242,16 +242,25 @@ Go / Rust 的 SDK 做同一件事：`Run` 完成 `initialize` 握手、按 `id` 
 把宿主广播的事件回调给 `Ready` / `OnEvent`（Rust 是 `ready` / `event`），
 `shutdown` 时干净退出。
 
-### 其它语言的独立模板仓库
+### 模板仓库：只放骨架，不复制 SDK
 
-C 与其它语言仍保留了可独立 clone 的模板仓库（内容与本仓库同源，方便单语言开工）：
+一条硬规则：**协议与 SDK 的唯一来源是本仓库 `extensions/`**（`schema/` + `sdk/` + `pack.py`
++ 宿主实现）。`TYWStudio/template-tml-extension-*` 这些仓库只是「clone 下来就能开工」的骨架，
+里面的 `src/main.*` 是业务代码，SDK 一律通过依赖引用本仓库，不复制一份进来：
 
-| 运行时 | 仓库 | 说明 |
+| 运行时 | 模板仓库 | 如何引用本仓库的 SDK |
 | --- | --- | --- |
-| Python 3 | <https://github.com/TYWStudio/template-tml-extension-python> | SDK + 示例 + 打包脚本 + CI |
-| Node.js | <https://github.com/TYWStudio/template-tml-extension-node> | SDK + 示例 + 打包脚本 + CI |
-| Java | <https://github.com/TYWStudio/template-tml-extension-java> | 独立 JVM 进程，SDK 基类 + 示例 |
-| C | <https://github.com/TYWStudio/template-tml-extension-c> | 零依赖原生可执行，gcc / clang / MSVC |
+| Go | <https://github.com/TYWStudio/template-tml-extension-go> | `require github.com/TYWStudio/TML/extensions/sdk/go v1.x.y` |
+| Rust | <https://github.com/TYWStudio/template-tml-extension-rust> | `tml-ext = { git = "https://github.com/TYWStudio/TML", tag = "sdk-rust-v1.0.0" }` |
+| Python 3 | <https://github.com/TYWStudio/template-tml-extension-python> | 自带 `sdk/tml_ext.py` 副本（单文件，便于离线） |
+| Node.js | <https://github.com/TYWStudio/template-tml-extension-node> | 自带 `sdk/tml_ext.js` 副本（单文件，便于离线） |
+| Java | <https://github.com/TYWStudio/template-tml-extension-java> | 自带 SDK 基类副本（无 Maven 依赖） |
+| C | <https://github.com/TYWStudio/template-tml-extension-c> | 零依赖原生可执行，无 SDK |
+
+Go 的 SDK 用 Git tag `extensions/sdk/go/v1.0.0` 发版，模板里 `go mod tidy` 就会拉到；
+Rust 的 SDK 由仓库根的 `Cargo.toml`（workspace）暴露，模板按 git tag 引用。
+**改协议时先改本仓库的 SDK，再打新 tag，模板升级依赖版本** —— 顺序反了就会出现
+「模板自己实现了一套协议」的分叉。
 
 模板仓库都带 `build.sh` / `build.bat`（编译 + 打包成 `.tmlext`）、`manifest.json`、
 `tests/smoke.py`（模拟宿主跑一遍协议）与 GitHub Actions 构建，克隆即可开工。

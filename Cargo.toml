@@ -1,0 +1,23 @@
+# 这份清单只有一个用途：让 extensions/sdk/rust 能被外部工程当「git 依赖」引用。
+#
+# Cargo 要求 git 依赖的仓库根部有一份 workspace 清单，否则
+#   tml-ext = { git = "https://github.com/TYWStudio/TML" }
+# 会报 "no matching package named `tml-ext` found"。
+# 顺带把示例挂进来，`cargo build --release` 在仓库根就能编出原生扩展。
+#
+# 启动器本体是 VB.NET / WPF 工程，和 Cargo 无关；构建启动器请走 _deploy/build.py。
+
+[workspace]
+resolver = "2"
+members = [
+    "extensions/sdk/rust",
+    "extensions/examples/hello-rust",
+]
+
+# 扩展是独立子进程，产物越小启动越快
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

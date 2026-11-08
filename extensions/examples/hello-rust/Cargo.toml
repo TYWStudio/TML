@@ -12,11 +12,3 @@ path = "src/main.rs"
 
 [dependencies]
 tml-ext = { path = "../../sdk/rust" }
-
-# 扩展是独立子进程，产物越小越好
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
-panic = "abort"

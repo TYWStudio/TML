@@ -152,7 +152,15 @@ def build_native(src, manifest):
         if not tool:
             raise SystemExit("需要 Rust 工具链（cargo build）才能打包原生扩展，或自行把二进制放到 " + entry)
         run_tool([tool, "build", "--release"], src)
-        built = src / "target" / "release" / (rust_bin_name(src) + (".exe" if os.name == "nt" else ""))
+        bin_name = rust_bin_name(src) + (".exe" if os.name == "nt" else "")
+        built = src / "target" / "release" / bin_name
+        if not built.exists():
+            # 仓库根有 workspace 清单时，产物落在上层目录的 target/release
+            for parent in src.parents:
+                cand = parent / "target" / "release" / bin_name
+                if cand.exists():
+                    built = cand
+                    break
         if not built.exists():
             raise SystemExit("cargo 没有产出可执行文件：" + str(built))
         target.parent.mkdir(parents=True, exist_ok=True)
