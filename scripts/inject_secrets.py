@@ -19,6 +19,13 @@ import os
 import re
 import sys
 
+# Windows 控制台/管道默认是 cp1252，直接 print 中文会 UnicodeEncodeError（CI 上就这么炸过）
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SECRET_VB = os.path.join(ROOT, 'TYW Launcher', 'Modules', 'ModSecret.vb')

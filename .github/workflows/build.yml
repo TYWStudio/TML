@@ -49,6 +49,8 @@ jobs:
 
       # 官方发行包在这里才把地址/密钥填进编译期常量；没有 Secrets 的 fork 保持空值 = 纯离线版
       - name: Inject server url & api keys
+        env:
+          PYTHONIOENCODING: utf-8
         run: python scripts/inject_secrets.py apply
 
       # 只编客户端工程：解决方案里还挂着 Avalonia 的 Linux/macOS 工程，这里不需要
