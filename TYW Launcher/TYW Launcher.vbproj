@@ -395,8 +395,8 @@
     <Compile Include="Pages\PageOther\PageOtherAbout.xaml.vb">
       <DependentUpon>PageOtherAbout.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Pages\PageOther\PageOtherExt.xaml.vb">
-      <DependentUpon>PageOtherExt.xaml</DependentUpon>
+    <Compile Include="Pages\PageSetup\PageSetupExt.xaml.vb">
+      <DependentUpon>PageSetupExt.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\PageOther\PageOtherHelp.xaml.vb">
       <DependentUpon>PageOtherHelp.xaml</DependentUpon>
@@ -648,7 +648,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Pages\PageOther\PageOtherExt.xaml">
+    <Page Include="Pages\PageSetup\PageSetupExt.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

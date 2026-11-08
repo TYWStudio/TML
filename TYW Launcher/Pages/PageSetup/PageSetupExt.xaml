@@ -2,8 +2,9 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:PCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-    mc:Ignorable="d" x:Class="PageOtherExt"
-    PanScroll="PanBack" RenderOptions.BitmapScalingMode="LowQuality">
+    mc:Ignorable="d" x:Class="PageSetupExt"
+    PanScroll="PanBack" AllowDrop="True" RenderOptions.BitmapScalingMode="LowQuality">
+    <Grid>
     <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
         <StackPanel x:Name="PanMain" Margin="25,10" Grid.IsSharedSizeScope="True">
             <local:MyCard Margin="0,15" Title="拓展管理">
@@ -11,13 +12,20 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="35" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Margin="0,0,0,12" TextWrapping="Wrap" LineHeight="19"
                                Text="拓展默认全部禁用。导入 .tmlext（Python / Node.js / C / Rust / Go）或 .jar（Java）扩展包后，需查看并确认其申请的权限，才会以独立子进程运行。扩展仅能使用经过审核的白名单能力，无法访问文件、网络、账号或启动器内部数据。" />
                     <StackPanel Grid.Row="1" Orientation="Horizontal">
                         <local:MyButton x:Name="BtnImport" Text="导入拓展" Width="160" Padding="13,0" Margin="0,0,15,0" ColorType="Highlight" />
-                        <local:MyButton x:Name="BtnRefresh" Text="刷新" Width="120" Padding="13,0" />
+                        <local:MyButton x:Name="BtnRefresh" Text="刷新" Width="110" Padding="13,0" Margin="0,0,15,0" />
+                        <local:MyButton x:Name="BtnOpenDir" Text="打开拓展目录" Width="160" Padding="13,0" />
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,0,0" FontSize="12"
+                                   Foreground="{DynamicResource ColorBrushGray4}"
+                                   Text="也可以直接把拓展包拖进窗口" />
                     </StackPanel>
+                    <TextBlock Grid.Row="2" x:Name="LabSummary" Margin="0,14,0,0" FontSize="12.5"
+                               Foreground="{DynamicResource ColorBrushGray3}" Text="正在读取拓展列表……" />
                 </Grid>
             </local:MyCard>
             <StackPanel x:Name="PanExtList" />
@@ -51,4 +59,16 @@
             </local:MyCard>
         </StackPanel>
     </local:MyScrollViewer>
+    <!-- 拖入文件时的全页提示层：不参与命中测试，避免抢走拖放目标 -->
+    <Border x:Name="PanDropHint" Visibility="Collapsed" IsHitTestVisible="False"
+            Margin="14" CornerRadius="8" BorderThickness="3"
+            BorderBrush="{DynamicResource ColorBrush2}" Background="#E6FFFFFF">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="松开鼠标，导入拓展" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"
+                       Foreground="#FF2B5A9E" />
+            <TextBlock Text=".tmlext / .jar" FontSize="13" HorizontalAlignment="Center" Margin="0,10,0,0"
+                       Foreground="#FF777777" />
+        </StackPanel>
+    </Border>
+    </Grid>
 </local:MyPageRight>

@@ -114,6 +114,8 @@ Public Module ModExt
         Public Property Permissions As New List(Of String)
         Public Property Subscribe As New List(Of String)
         Public Property State As ExtState = ExtState.Disabled
+        ''' <summary>用户上次关掉启动器时它是启用状态（下次启动自动拉起）。</summary>
+        Public Property AutoStart As Boolean = False
         Public Property ErrorMessage As String = ""
         Public Property NeedsRuntime As Boolean = False
         Public Property PrivateDir As String = ""
@@ -189,7 +191,6 @@ Public Module ModExt
                   instancesProvider:=AddressOf DefaultInstances,
                   settingsReader:=AddressOf DefaultSettingsGet,
                   settingsWriter:=AddressOf DefaultSettingsSet,
-                  rootProvider:=AddressOf ExtRoot,
                   versionProvider:=Function() VersionDisplay,
                   channelProvider:=AddressOf DefaultChannel,
                   languageProvider:=Function() System.Threading.Thread.CurrentThread.CurrentUICulture.Name)
@@ -301,21 +302,31 @@ Public Module ModExt
 
 #End Region
 
+    ''' <summary>
+    ''' 拓展根目录。这里**不能**回头读 RootProvider：Init 里注入的 rootProvider 本身就是 ExtRoot，
+    ''' 一读就是 ExtRoot → RootProvider → ExtRoot 的自递归，直接 StackOverflow 把进程打死。
+    ''' </summary>
     Private Function ExtRoot() As String
-        Dim root As String = If(RootProvider IsNot Nothing, RootProvider(), "")
+        Dim root As String = ""
+        Try
+            ' 优先放到用户可写目录；不放在 exe 旁边（Program Files 下无写权限，且与二进制同目录不安全）
+            root = Path.Combine(Paths.AppDataThenName, "Extensions")
+        Catch
+            root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions")
+        End Try
         If String.IsNullOrWhiteSpace(root) Then
-            Try
-                ' 优先放到用户可写目录；不放在 exe 旁边（Program Files 下无写权限，且与二进制同目录不安全）
-                root = Path.Combine(Paths.AppDataThenName, "Extensions")
-            Catch
-                root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions")
-            End Try
+            root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extensions")
         End If
         Try
             Directory.CreateDirectory(root)
         Catch
         End Try
         Return root
+    End Function
+
+    ''' <summary>拓展存放目录（供「打开目录」用）。</summary>
+    Public Function ExtensionRoot() As String
+        Return ExtRoot()
     End Function
 
     Friend Sub Log(level As String, message As String)
@@ -369,11 +380,14 @@ Public Module ModExt
                 Try
                     If trusted IsNot Nothing AndAlso trusted.Property(info.Id) IsNot Nothing Then
                         ' 包内容变了：信任失效，自动禁用，等用户重新确认
-                        Dim saved As String = If(trusted.Value(Of String)(info.Id), "")
+                        Dim saved As String = TrustedSha(trusted, info.Id)
                         If saved <> "" AndAlso Not String.Equals(saved, info.Sha256, StringComparison.OrdinalIgnoreCase) Then
                             info.State = ExtState.Disabled
                             info.ErrorMessage = "扩展包已变更，需要重新确认权限后启用"
+                            info.AutoStart = False
                             trusted.Remove(info.Id)
+                        Else
+                            info.AutoStart = TrustedEnabled(trusted, info.Id)
                         End If
                     End If
                 Catch
@@ -544,6 +558,41 @@ Public Module ModExt
         End Try
     End Sub
 
+    ' trusted.json 早期版本直接存 sha256 字符串，现在存 { sha, enabled }，两种都能读。
+    Private Function TrustedEntry(trusted As JObject, id As String) As JObject
+        If trusted Is Nothing OrElse id = "" Then Return Nothing
+        Dim prop As JProperty = trusted.Property(id)
+        If prop Is Nothing Then Return Nothing
+        Dim obj As JObject = TryCast(prop.Value, JObject)
+        If obj IsNot Nothing Then Return obj
+        Dim s As String = TryCast(prop.Value, JValue)?.Value(Of String)()
+        If s Is Nothing Then Return Nothing
+        Return New JObject From {{"sha", s}, {"enabled", False}}
+    End Function
+
+    Private Function TrustedSha(trusted As JObject, id As String) As String
+        Dim e As JObject = TrustedEntry(trusted, id)
+        If e Is Nothing Then Return ""
+        Dim t As JToken = e.Property("sha")?.Value
+        Return If(t Is Nothing, "", CStr(t))
+    End Function
+
+    Private Function TrustedEnabled(trusted As JObject, id As String) As Boolean
+        Dim e As JObject = TrustedEntry(trusted, id)
+        If e Is Nothing Then Return False
+        Dim t As JToken = e.Property("enabled")?.Value
+        If t Is Nothing Then Return False
+        Return t.Type = JTokenType.Boolean AndAlso t.Value(Of Boolean)()
+    End Function
+
+    ''' <summary>记录「已确认的包摘要」与「上次是否启用」，Disable 时保留摘要只改开关。</summary>
+    Private Sub SaveTrusted(id As String, sha As String, enabled As Boolean)
+        If id = "" Then Return
+        Dim trusted As JObject = ReadTrusted(ExtRoot())
+        trusted(id) = New JObject From {{"sha", sha}, {"enabled", enabled}}
+        WriteTrusted(ExtRoot(), trusted)
+    End Sub
+
     ''' <summary>用户看过权限清单并确认后才能启用；userConfirmed=False 一律拒绝。</summary>
     Public Function Enable(id As String, userConfirmed As Boolean) As Boolean
         If Not userConfirmed Then Return False
@@ -563,9 +612,9 @@ Public Module ModExt
         End Try
         info.Host = host
         info.State = ExtState.Enabled
-        Dim trusted As JObject = ReadTrusted(ExtRoot())
-        trusted(info.Id) = info.Sha256
-        WriteTrusted(ExtRoot(), trusted)
+        info.AutoStart = True
+        info.ErrorMessage = ""
+        SaveTrusted(info.Id, info.Sha256, True)
         Return True
     End Function
 
@@ -578,7 +627,28 @@ Public Module ModExt
         End Try
         info.Host = Nothing
         info.State = ExtState.Disabled
+        info.AutoStart = False
+        If info.Sha256 <> "" Then SaveTrusted(info.Id, info.Sha256, False)
     End Sub
+
+    ''' <summary>启动器启动后调用：把上次处于启用状态的拓展重新拉起。任何异常都只记日志。</summary>
+    Public Function StartEnabled() As Integer
+        Dim started As Integer = 0
+        Try
+            Scan()
+            For Each info As ExtInfo In GetAll()
+                If Not info.AutoStart OrElse info.State = ExtState.Error Then Continue For
+                Try
+                    If Enable(info.Id, True) Then started += 1
+                Catch ex As Exception
+                    Log("warn", "自动启动扩展 " & info.Id & " 失败：" & ex.Message)
+                End Try
+            Next
+        Catch ex As Exception
+            Log("warn", "自动启动扩展失败：" & ex.Message)
+        End Try
+        Return started
+    End Function
 
     Public Function IsEnabled(id As String) As Boolean
         Dim info As ExtInfo = GetInfo(id)

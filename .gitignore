@@ -351,9 +351,15 @@ _deploy/
 TYWLauncher-macOS/packaging/server_url.txt
 TYWLauncher-Linux/packaging/server_url.txt
 
+# ===== 工程改名后整体提交：排除运行时残留 / 构建产物 =====
+TYW Launcher/.minecraft/
+TYW Launcher/TYW Launcher/
+TYW Launcher/TYW Minecraft Launcher.exe
+TYW Launcher/*_wpftmp.vbproj
+
 # ---- TML 扩展示例的编译产物（各自平台现编，不入库）----
-/target/
 extensions/examples/hello-go/bin/
+/target/
 extensions/examples/hello-rust/target/
 extensions/examples/hello-go.tmlext
 extensions/examples/hello-rust.tmlext

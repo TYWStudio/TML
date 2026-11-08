@@ -12,6 +12,15 @@ Public Class Application
             '扩展系统初始化（仅注入宿主能力，不启动任何扩展进程；失败不影响启动）
             Try
                 ModExt.Init()
+                '上次退出时处于启用状态的拓展在后台恢复，绝不阻塞启动
+                Threading.Tasks.Task.Run(Sub()
+                                             Threading.Thread.Sleep(1500)
+                                             Try
+                                                 ModExt.StartEnabled()
+                                             Catch ex As Exception
+                                                 Logger.Warn(ex, "恢复拓展失败")
+                                             End Try
+                                         End Sub)
             Catch ex As Exception
                 Logger.Warn(ex, "扩展系统初始化失败")
             End Try

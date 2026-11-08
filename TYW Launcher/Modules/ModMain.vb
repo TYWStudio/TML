@@ -407,13 +407,13 @@ EndHint:
     Public FrmSetupUI As PageSetupUI
     Public FrmSetupSystem As PageSetupSystem
     Public FrmSetupLink As PageSetupLink
+    Public FrmSetupExt As PageSetupExt
 
     '其他页面声明
     Public FrmOtherLeft As PageOtherLeft
     Public FrmOtherHelp As PageOtherHelp
     Public FrmOtherAbout As PageOtherAbout
     Public FrmOtherTest As PageOtherTest
-    Public FrmOtherExt As PageOtherExt
 
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy

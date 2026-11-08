@@ -457,13 +457,15 @@ Refresh:
                 FrmSetupLeft.ItemUI.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi"), Visibility.Collapsed, Visibility.Visible)
                 FrmSetupLeft.ItemLink.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink"), Visibility.Collapsed, Visibility.Visible)
                 FrmSetupLeft.ItemSystem.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem"), Visibility.Collapsed, Visibility.Visible)
-                '隐藏左边选择卡
-                Dim AvaliableCount As Integer = 0
+                '拓展页固定显示，不参与隐藏
+                FrmSetupLeft.ItemExt.Visibility = Visibility.Visible
+                '隐藏左边选择卡（拓展页始终存在，所以只在连它都不可用时才收起）
+                Dim AvaliableCount As Integer = 1
                 If Not Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then AvaliableCount += 1
                 If Not Settings.Get(Of Boolean)("UiHiddenSetupUi") Then AvaliableCount += 1
                 'If Not Settings.Get(Of Boolean)("UiHiddenSetupLink") Then AvaliableCount += 1
                 If Not Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then AvaliableCount += 1
-                FrmSetupLeft.PanItem.Visibility = If(AvaliableCount < 2 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
+                FrmSetupLeft.PanItem.Visibility = If(AvaliableCount < 1 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
             End If
             '更多子页面
             Dim OtherAvaliableCount As Integer = 0

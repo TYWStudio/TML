@@ -122,8 +122,9 @@ Public Class FormMain
     Private Sub FormMain_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         ApplicationStartTick = GetTimeMs()
         Handle = New WindowInteropHelper(Me).Handle
-        '窗口标题：XAML（BAML）里的旧标题无法修改，这里在运行期统一覆盖为新品牌名
-        Title = "TML Launcher"
+        '窗口标题：XAML（BAML）里的旧标题无法修改，这里在运行期统一覆盖为 TYW Launcher
+        '（只有顶栏那三个字母是 TML，任务栏 / Alt+Tab 仍然显示 TYW Launcher）
+        Title = "TYW Launcher"
         '读取设置
         UpdateBackgroundAndTitleBar()
         PageSetupUI.HiddenRefresh()
@@ -969,8 +970,18 @@ Public Class FormMain
                 Hint("拖入的文件不存在：" & FilePathList.First, HintType.Red)
                 Return
             End If
-            '多文件拖拽
             Dim PathList As List(Of String) = FilePathList.ToList()
+            '拓展包优先：.tmlext 既不是 Mod 也不是整合包，拖到任意页面都交给拓展管理页导入。
+            '管理员权限下走 DragHelper，不经过 WPF 的 Drop 路由，这条兜底也能接住。
+            If PathList.All(Function(f) String.Equals(PathUtils.GetExtension(f), "tmlext", StringComparison.OrdinalIgnoreCase)) Then
+                RunInUi(
+                Sub()
+                    If FrmSetupExt Is Nothing Then FrmSetupExt = New PageSetupExt
+                    FrmSetupExt.InstallFiles(PathList)
+                End Sub)
+                Return
+            End If
+            '多文件拖拽
             If FilePathList.Count > 1 Then
                 '必须要求全部为 jar 文件
                 For Each File In PathList
@@ -1171,11 +1182,11 @@ Public Class FormMain
         SetupLink = 1
         SetupUI = 2
         SetupSystem = 3
+        SetupExt = 4
         LinkMain = 0
         OtherHelp = 0
         OtherAbout = 1
         OtherTest = 2
-        OtherExt = 5
         InstanceOverall = 0
         InstanceSetup = 1
         InstanceModify = 2

@@ -36,5 +36,7 @@
                 </x:Array>
             </local:MyListItem.Buttons>
         </local:MyListItem>
+        <local:MyListItem x:Name="ItemExt" IsScaleAnimationEnabled="False" Type="RadioBox" Tag="4" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="拓展"
+                          LogoScale="0.86" Logo="M874.67 469.33H810.67V298.67c0-46.93-.384-85.33-85.33-85.33h-170.67V149.33C554.67 90.45 506.88 42.67 448 42.67S341.33 90.45 341.33 149.33V213.33H170.67c-46.93 0-84.91.384-84.91 85.33v162.13H149.33c63.57 0 115.2 51.63 115.2 115.2s-51.63 115.2-115.2 115.2H85.33V853.33c0 46.93.384 85.33 85.33 85.33h162.13v-64c0-63.57 51.63-115.2 115.2-115.2s115.2 51.63 115.2 115.2V938.67H725.33c46.93 0 85.33-.384 85.33-85.33v-170.67h64c58.88 0 106.67-47.79 106.67-106.67S933.55 469.33 874.67 469.33z" />
     </StackPanel>
 </local:MyPageLeft>
