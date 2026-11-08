@@ -20,9 +20,10 @@ env:
 jobs:
   build:
     name: macOS ${{ matrix.arch }}
-    # macos-14 = Apple Silicon。osx-x64 也在 arm64 机器上交叉发布：
+    # macos-latest = Apple Silicon（macos-14 标签已退役，写死会直接取消任务）。
+    # osx-x64 也在 arm64 机器上交叉发布：
     # 托管代码不需要本地编译，只要下载对应架构的 runtime pack 即可。
-    runs-on: macos-14
+    runs-on: macos-latest
     # 服务端地址来自仓库 Secrets 的 TYW_SERVER_URL，源码里不出现
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}

@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build Windows
 
 on:
   push:
@@ -17,10 +17,27 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 注入，
-    # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 三配置对应三通道：Release=正式版，Snapshot=快照版，Debug=内测版
+          - configuration: Release
+            binary: TYW Launcher.exe
+            artifact: TYWLauncher-windows-x64
+          - configuration: Snapshot
+            binary: TYW Launcher Snapshot.exe
+            artifact: TYWLauncher-windows-x64-snapshot
+          - configuration: Debug
+            binary: TYW Launcher Beta.exe
+            artifact: TYWLauncher-windows-x64-beta
+    # 服务端地址与 API 密钥都不写在仓库里：CI 在编译前临时注入 ModSecret.vb
+    # （scripts/inject_secrets.py），工作区用完即销毁，源码永远只有空值。
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
+      PCL_MS_CLIENT_ID: ${{ secrets.PCL_MS_CLIENT_ID }}
+      PCL_CURSEFORGE_API_KEY: ${{ secrets.PCL_CURSEFORGE_API_KEY }}
+      TYW_CLS_URL: ${{ secrets.TYW_CLS_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,18 +47,24 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Restore NuGet packages
-        run: msbuild "TYW Launcher.sln" /restore /t:Build /p:Configuration=Release /m /nologo /v:m
+      # 官方发行包在这里才把地址/密钥填进编译期常量；没有 Secrets 的 fork 保持空值 = 纯离线版
+      - name: Inject server url & api keys
+        run: python scripts/inject_secrets.py apply
 
-      # 客户端解析顺序：设置项 > TYW_SERVER 环境变量 > 程序目录 server.txt > 编译期常量。
-      # exe 旁边的 server.txt 是最省事的注入方式，解压即生效，源码里不出现地址。
+      # 只编客户端工程：解决方案里还挂着 Avalonia 的 Linux/macOS 工程，这里不需要
+      - name: Build ${{ matrix.configuration }}
+        run: msbuild "TYW Launcher\TYW Launcher.vbproj" /restore /t:Build /p:Configuration=${{ matrix.configuration }} /m /nologo /v:m
+
+      # 双保险：exe 旁边也放一份 server.txt（客户端读它的优先级高于编译期常量，
+      # 用户想指到自己的服务端时改这个文件即可，不用重新编译）
       - name: Package (exe + server.txt)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item 'TYW Launcher/bin/Release/TYW Launcher.exe' 'dist/TYW Launcher.exe'
+          Copy-Item "TYW Launcher/bin/${{ matrix.configuration }}/TYW Launcher.exe" "dist/${{ matrix.binary }}"
           if ($env:TYW_SERVER_URL) {
             $u = $env:TYW_SERVER_URL.Trim()
+            if (-not $u.EndsWith('/')) { $u = "$u/" }
             [IO.File]::WriteAllText("$PWD/dist/server.txt", "$u`n", (New-Object Text.UTF8Encoding($false)))
             Write-Host "server.txt -> $u"
           } else {
@@ -49,16 +72,26 @@ jobs:
           }
           Get-ChildItem dist | Format-Table Name,Length | Out-String
 
-      - name: Upload build artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TYW-Launcher
+          name: ${{ matrix.artifact }}
           path: dist/*
           if-no-files-found: error
 
-      - name: Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+  # 三个通道的产物都在同一个 tag 里发，所以汇总后再上传，避免三个 job 抢同一个 Release
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: assets/*
           generate_release_notes: true

@@ -6,10 +6,19 @@ Friend Module ModSecret
     Public Const VersionBranchMain As String = "OpenSource"
     '在开源版的注册表与常规版的注册表隔离，以防数据冲突
     Public Const RegFolder As String = "PCLDebug"
+    '★ 密钥一律不进源码 ★
+    '下面三个常量在开源仓库里恒为空串。官方发行包由打包脚本 / GitHub Actions 在编译期
+    '把值填进来（scripts/inject_secrets.py，读环境变量或 _deploy/*.txt），构建完立即还原，
+    '所以仓库里永远看不到真实值。运行时的同名环境变量优先级更高，方便本机调试。
+    '   PCL_MS_CLIENT_ID         → BuiltInOAuthClientId（微软登录 ClientId）
+    '   PCL_CURSEFORGE_API_KEY   → BuiltInCurseForgeKey（CurseForge API Key）
+    '   TYW_CLS_URL              → ClsBaseUrl（匿名上报地址）
+    Public Const BuiltInOAuthClientId As String = ""
+    Public Const BuiltInCurseForgeKey As String = ""
     '用于微软登录的 ClientId
-    Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "852d43f4-7b54-4544-9a0e-fc04c3c35c82")
+    Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), BuiltInOAuthClientId)
     'CurseForge API Key
-    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "$2a$10$2fcSOPMyE/ckR48Gcw6/UOTsa0I0uW2jH5sr7zT.cQAVqPKUHnJtK")
+    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), BuiltInCurseForgeKey)
     'TYW Launcher 自建服务端地址（公告 / 启动器更新下载，须以 / 结尾）
     '
     '★ 开源版默认留空 ★ 仓库里不带任何服务器地址，所有服务端功能（公告、自动更新、
