@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      server_url:
+        description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -12,6 +17,10 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 注入，
+    # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
+    env:
+      TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,16 +33,32 @@ jobs:
       - name: Restore NuGet packages
         run: msbuild "TYW Launcher.sln" /restore /t:Build /p:Configuration=Release /m /nologo /v:m
 
+      # 客户端解析顺序：设置项 > TYW_SERVER 环境变量 > 程序目录 server.txt > 编译期常量。
+      # exe 旁边的 server.txt 是最省事的注入方式，解压即生效，源码里不出现地址。
+      - name: Package (exe + server.txt)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item 'TYW Launcher/bin/Release/TYW Launcher.exe' 'dist/TYW Launcher.exe'
+          if ($env:TYW_SERVER_URL) {
+            $u = $env:TYW_SERVER_URL.Trim()
+            [IO.File]::WriteAllText("$PWD/dist/server.txt", "$u`n", (New-Object Text.UTF8Encoding($false)))
+            Write-Host "server.txt -> $u"
+          } else {
+            Write-Host "::warning::未配置 TYW_SERVER_URL，本次产物为离线版"
+          }
+          Get-ChildItem dist | Format-Table Name,Length | Out-String
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: TYW-Launcher
-          path: 'TYW Launcher/bin/Release/TYW Launcher.exe'
+          path: dist/*
           if-no-files-found: error
 
       - name: Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: 'TYW Launcher/bin/Release/TYW Launcher.exe'
+          files: dist/*
           generate_release_notes: true

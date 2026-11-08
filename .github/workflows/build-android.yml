@@ -61,6 +61,9 @@ jobs:
 
       - name: Build ${{ matrix.channel }}
         working-directory: TYWLauncher-Android
+        # BuildConfig.SERVER_ADDRESS 读这个环境变量；地址只存在仓库 Secrets 里
+        env:
+          TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
         run: |
           gradle ${{ matrix.task }} --no-daemon --console=plain
 

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       server_url:
-        description: '服务端地址（留空 = 离线版，填了才注入，产物名带 -server）'
+        description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
 
@@ -17,6 +17,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 注入，
+    # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
+    env:
+      TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -47,8 +51,6 @@ jobs:
 
       - name: Package tar.gz
         working-directory: TYWLauncher-Linux
-        env:
-          TYW_SERVER_URL: ${{ github.event.inputs.server_url }}
         run: |
           set -e
           mkdir -p dist stage
@@ -68,7 +70,7 @@ jobs:
             printf "$DESKTOP" > "$stage/tyw-launcher.desktop"
             printf "$WRAPPER" > "$stage/tyw-launcher"
             chmod +x "$stage/tyw-launcher" "$stage/TYWLauncher"
-            # 官方发行包把服务端地址写进包内的 server.txt（开源/默认构建不写，纯离线）
+            # 服务端地址写进包内的 server.txt；地址来自 CI Secrets，仓库里查不到
             if [ -n "${TYW_SERVER_URL:-}" ]; then
               printf '%s\n' "$TYW_SERVER_URL" > "$stage/server.txt"
             fi
@@ -81,7 +83,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TYWLauncher-linux-${{ matrix.arch }}${{ github.event.inputs.server_url != '' && '-server' || '' }}
+          name: TYWLauncher-linux-${{ matrix.arch }}
           path: |
             TYWLauncher-Linux/dist/*.tar.gz
             TYWLauncher-Linux/dist/SHA256SUMS-linux-*.txt

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       server_url:
-        description: '服务端地址（留空 = 离线版；只有构建服务器分发包时才填，例如 http://host:17403/）'
+        description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
 
@@ -23,6 +23,9 @@ jobs:
     # macos-14 = Apple Silicon。osx-x64 也在 arm64 机器上交叉发布：
     # 托管代码不需要本地编译，只要下载对应架构的 runtime pack 即可。
     runs-on: macos-14
+    # 服务端地址来自仓库 Secrets 的 TYW_SERVER_URL，源码里不出现
+    env:
+      TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -47,9 +50,6 @@ jobs:
         working-directory: TYWLauncher-macOS
         env:
           PYTHON: python3
-          # 默认空 = 离线版（GitHub 上的产物一律不带服务器地址）。
-          # 手动触发时填 server_url 才会注入，用于构建服务器 www 的分发包。
-          TYW_SERVER_URL: ${{ github.event.inputs.server_url }}
         run: bash ./packaging/build-macos.sh "$VERSION" ${{ matrix.arch }}
 
       - name: Verify bundle
@@ -87,8 +87,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          # 带服务端地址的构建单独命名，避免和 GitHub 上的离线版混淆
-          name: TYWLauncher-macos-${{ matrix.arch }}${{ github.event.inputs.server_url != '' && '-server' || '' }}
+          name: TYWLauncher-macos-${{ matrix.arch }}
           path: |
             TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
             TYWLauncher-macOS/dist/TYWLauncher-macos-*.dmg
