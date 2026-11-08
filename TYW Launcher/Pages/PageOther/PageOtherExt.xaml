@@ -24,7 +24,7 @@
             <local:MyCard Margin="0,0,0,15" Title="开发拓展">
                 <StackPanel Margin="21,40,21,18">
                     <TextBlock Margin="0,0,0,14" TextWrapping="Wrap" LineHeight="19"
-                               Text="拓展是独立子进程，只通过标准输入输出的 NDJSON 与启动器通信，任何能读写管道的语言都能写。下面六个仓库是官方模板：含 SDK、可运行的示例、打包脚本与 GitHub Actions 构建，克隆下来改一改就能用。协议文档见启动器仓库的 extensions/README.md。" />
+                               Text="拓展是独立子进程，只通过标准输入输出的 NDJSON 与启动器通信，任何能读写管道的语言都能写。Python / Node.js / Java / C 用独立模板仓库；Rust 与 Go 的接入代码（SDK + 示例 + 打包）就在启动器仓库的 extensions/ 里（sdk/go、sdk/rust、examples/hello-go、hello-rust），不用另外找。协议文档见启动器仓库的 extensions/README.md。" />
                     <WrapPanel Orientation="Horizontal">
                         <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="Python 模板"
                                         local:CustomEventService.EventType="打开网页"
@@ -38,12 +38,12 @@
                         <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="C 模板"
                                         local:CustomEventService.EventType="打开网页"
                                         local:CustomEventService.EventData="https://github.com/TYWStudio/template-tml-extension-c" />
-                        <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="Rust 模板"
+                        <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="Rust（仓库内）"
                                         local:CustomEventService.EventType="打开网页"
-                                        local:CustomEventService.EventData="https://github.com/TYWStudio/template-tml-extension-rust" />
-                        <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="Go 模板"
+                                        local:CustomEventService.EventData="https://github.com/TYWStudio/TML/tree/main/extensions/sdk/rust" />
+                        <local:MyButton Height="35" MinWidth="150" Margin="0,0,10,10" Padding="13,0" Text="Go（仓库内）"
                                         local:CustomEventService.EventType="打开网页"
-                                        local:CustomEventService.EventData="https://github.com/TYWStudio/template-tml-extension-go" />
+                                        local:CustomEventService.EventData="https://github.com/TYWStudio/TML/tree/main/extensions/sdk/go" />
                     </WrapPanel>
                     <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="19" Foreground="{DynamicResource ColorBrushGray4}"
                                Text="原生语言（C / Rust / Go）的扩展会被直接当作可执行文件拉起，不套解释器；Python 与 Node.js 需要本机已安装对应运行环境，启动器不会自动下载任何运行时。" />
