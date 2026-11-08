@@ -13,6 +13,19 @@
 #   ./packaging/build.sh 1.0.0                 # 自动探测 out/ 下已发布的架构
 #   ./packaging/build.sh 1.0.0 x64 arm64       # 指定架构
 #
+# 环境变量（CI / 多通道时用，本机单通道构建留空即可）：
+#   TYW_CHANNEL   Release | Snapshot | Beta
+#                 指定后 tar.gz 用服务端认的固定名（TYWLauncher-linux-<arch>[-snapshot|-beta].tar.gz），
+#                 deb / rpm / pkg.tar.zst / AppImage 的版本号带上通道标记，避免三个通道互相覆盖。
+#   TYW_SRC_DIR   发布产物目录（默认 out/linux-<arch>）。CI 里三通道分别发布到 out/ch-<通道>。
+#
+# 依赖（缺失的格式会自动跳过，不会中断）：
+#   dpkg-deb      deb        apt install dpkg
+#   rpmbuild      rpm        apt install rpm        / dnf install rpm-build
+#   zstd          pkg.tar.zst apt install zstd
+#   mksquashfs    AppImage 的备用打包路径
+#   appimagetool  AppImage  脚本会自动下载到 .tools/（也可自行放到 PATH），按目标架构下载
+#
 # 依赖（缺失的格式会自动跳过，不会中断）：
 #   dpkg-deb      deb        apt install dpkg
 #   rpmbuild      rpm        apt install rpm        / dnf install rpm-build
@@ -36,17 +49,37 @@ ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
 skip() { printf '    \033[33m-\033[0m 跳过 %s：%s\n' "$1" "$2"; }
 die()  { printf '\033[31m错误：%s\033[0m\n' "$*" >&2; exit 1; }
 
+# ---------------------------------------------------------------- 通道
+# 留空 = 本机单通道构建，文件名与历史版本完全一致。
+CHANNEL="${TYW_CHANNEL:-}"
+case "$CHANNEL" in
+  Release|"") CH_SUF=""        ;;   # 正式版
+  Snapshot)   CH_SUF="-snapshot" ;;
+  Beta)       CH_SUF="-beta"     ;;
+  *) die "未知通道：$CHANNEL（应为 Release / Snapshot / Beta）" ;;
+esac
+# 各包格式的版本号标记。deb 用 ~ 让它排在正式版之前；rpm 的 Release / Arch 的 pkgver
+# 不允许 ~，改用 . 与 _ 分隔。
+case "$CHANNEL" in
+  Snapshot) DEB_CH="~snapshot"; RPM_REL="1.snapshot"; PAC_CH="_snapshot" ;;
+  Beta)     DEB_CH="~beta";     RPM_REL="1.beta";     PAC_CH="_beta"     ;;
+  *)        DEB_CH="";          RPM_REL="1";          PAC_CH=""         ;;
+esac
+
+# 发布产物目录：默认 out/linux-<arch>，CI 里由 TYW_SRC_DIR 指向 out/ch-<通道>
+src_dir() { # $1=arch
+  if [ -n "${TYW_SRC_DIR:-}" ]; then
+    printf '%s' "$TYW_SRC_DIR"
+  else
+    printf '%s' "$ROOT/out/linux-$1"
+  fi
+}
+
 # 官方发行包注入服务端地址（开源仓库默认不带任何地址）。
 # TYW_SERVER_URL 优先，其次 packaging/server_url.txt（本机发版用，不入仓库）。
 SRV_URL="${TYW_SERVER_URL:-}"
 if [ -z "$SRV_URL" ] && [ -f "$ROOT/packaging/server_url.txt" ]; then
   SRV_URL="$(head -n 1 "$ROOT/packaging/server_url.txt" | tr -d '\r\n')"
-fi
-if [ -n "$SRV_URL" ]; then
-  for d in "$ROOT"/out/linux-*; do
-    [ -d "$d" ] && printf '%s\n' "$SRV_URL" > "$d/server.txt"
-  done
-  echo "已写入 server.txt：$SRV_URL"
 fi
 
 mkdir -p "$OUT"
@@ -77,7 +110,7 @@ else
   mapfile -t ARCHES < <(probe_arches) || die "out/ 下没有已发布的产物，先执行 dotnet publish"
 fi
 
-printf '版本：%s    架构：%s\n\n' "$VER" "${ARCHES[*]}"
+printf '版本：%s    架构：%s    通道：%s\n\n' "$VER" "${ARCHES[*]}" "${CHANNEL:-单通道}"
 
 # ---------------------------------------------------------------- 公共文件
 desktop_file() {
@@ -103,7 +136,8 @@ EOF
 
 # 按 FHS 摆放：程序在 /opt，命令与图标做链接/安装
 stage_fhs() { # $1=arch $2=目标目录
-  local arch="$1" pub="$ROOT/out/linux-$1" stage="$2"
+  local arch="$1" pub stage
+  pub="$(src_dir "$1")"; stage="$2"
   rm -rf "$stage"
   mkdir -p "$stage/opt/$APP" \
            "$stage/usr/bin" \
@@ -127,8 +161,9 @@ EOF
 
 # ================================================================ tar.gz
 build_tarball() { # $1=arch
-  local arch="$1" pub="$ROOT/out/linux-$arch"
-  local stage="$WORK/tar-$arch/$APP-$VER"
+  local arch="$1" pub stage
+  pub="$(src_dir "$1")"
+  stage="$WORK/tar-$arch/$APP-$VER"
   mkdir -p "$stage"
   cp -a "$pub/." "$stage/"
   cp "$ICONS/tyw-256.png" "$stage/$APP.png"
@@ -140,7 +175,13 @@ HERE="$(dirname "$(readlink -f "$0")")"
 exec "$HERE/TYWLauncher" "$@"
 SH
   chmod +x "$stage/$APP" "$stage/TYWLauncher"
-  local out="$OUT/${APP}-${VER}-linux-${arch}.tar.gz"
+  local out
+  if [ -n "$CHANNEL" ]; then
+    # 服务端 config.json 的 Linux.Channels.*.File / FileArm64 认这套固定名，别改
+    out="$OUT/TYWLauncher-linux-${arch}${CH_SUF}.tar.gz"
+  else
+    out="$OUT/${APP}-${VER}-linux-${arch}.tar.gz"
+  fi
   tar -C "$WORK/tar-$arch" -czf "$out" "$APP-$VER"
   ok "$(basename "$out")"
 }
@@ -158,7 +199,7 @@ build_deb() { # $1=arch
   size=$(du -sb "$pkg/opt" | cut -f1)
   cat > "$pkg/DEBIAN/control" <<EOF
 Package: $APP
-Version: $VER
+Version: $VER$DEB_CH
 Section: games
 Priority: optional
 Architecture: $darch
@@ -173,7 +214,7 @@ Description: TYW Launcher for Linux
 EOF
   # 让 dpkg 知道要建菜单缓存
   mkdir -p "$pkg/DEBIAN"
-  local out="$OUT/${APP}_${VER}_${darch}.deb"
+  local out="$OUT/${APP}_${VER}${DEB_CH}_${darch}.deb"
   dpkg-deb --build --root-owner-group "$pkg" "$out" >/dev/null || { skip deb "dpkg-deb 打包失败"; return 0; }
   ok "$(basename "$out")  $(du -h "$out" | cut -f1)"
 }
@@ -188,7 +229,7 @@ build_rpm() { # $1=arch
   cat > "$top/SPECS/$APP.spec" <<EOF
 Name:           $APP
 Version:        $VER
-Release:        1
+Release:        $RPM_REL
 Summary:        TYW Launcher for Linux
 License:        Proprietary
 URL:            https://tywmc.cn
@@ -214,8 +255,8 @@ cp -a $stage/. %{buildroot}/
 /usr/share/doc/$APP
 
 %changelog
-* $(LC_ALL=C date '+%a %b %d %Y') TYW <support@tywmc.cn> - $VER-1
-- Release $VER
+* $(LC_ALL=C date '+%a %b %d %Y') TYW <support@tywmc.cn> - $VER-$RPM_REL
+- Release $VER${CH_SUF}
 EOF
   # 交叉构建：rpmbuild 默认只允许给本机架构打包，
   # 在 rpmrc 里补一条 buildarch_compat 才能产出 aarch64 包。
@@ -240,7 +281,7 @@ EOF
   local built
   built=$(find "$top/RPMS" -name "*.rpm" | head -1)
   [ -n "$built" ] || { skip rpm "没有产出 rpm"; return 0; }
-  local out="$OUT/${APP}-${VER}-1.${rarch}.rpm"
+  local out="$OUT/${APP}-${VER}-${RPM_REL}.${rarch}.rpm"
   cp "$built" "$out"
   ok "$(basename "$out")  $(du -h "$out" | cut -f1)"
 }
@@ -256,7 +297,7 @@ build_pacman() { # $1=arch
   {
     echo "pkgname = $APP"
     echo "pkgbase = $APP"
-    echo "pkgver = $VER-1"
+    echo "pkgver = $VER$PAC_CH-1"
     echo "pkgdesc = TYW Launcher for Linux"
     echo "url = https://tywmc.cn"
     echo "builddate = $(date +%s)"
@@ -274,7 +315,7 @@ build_pacman() { # $1=arch
     echo "depend = libxrandr"
     echo "depend = libxcursor"
   } > "$stage/.PKGINFO"
-  local out="$OUT/${APP}-${VER}-1-${parch}.pkg.tar.zst"
+  local out="$OUT/${APP}-${VER}${PAC_CH}-1-${parch}.pkg.tar.zst"
   ( cd "$stage" && tar --owner=0 --group=0 --numeric-owner --zstd -cf "$out" .PKGINFO opt usr ) \
     || { skip "pkg.tar.zst" "tar 打包失败"; return 0; }
   ok "$(basename "$out")  $(du -h "$out" | cut -f1)"
@@ -303,30 +344,34 @@ fetch_runtime() { # $1=x86_64|aarch64 -> 打印 runtime 路径
   return 1
 }
 
-ensure_appimagetool() { # -> 打印 appimagetool 入口
+ensure_appimagetool() { # $1=x86_64|aarch64 -> 打印 appimagetool 入口
   command -v appimagetool >/dev/null && { command -v appimagetool; return 0; }
-  [ -x "$TOOLS/appimagetool/AppRun" ] && { echo "$TOOLS/appimagetool/AppRun"; return 0; }
+  local iarch="$1" home
+  home="$TOOLS/appimagetool-$iarch"
+  [ -x "$home/AppRun" ] && { echo "$home/AppRun"; return 0; }
   command -v wget >/dev/null || return 1
   mkdir -p "$TOOLS"
-  local url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+  # 按目标架构取工具：arm64 runner 上跑 x86_64 的 AppImage 需要 binfmt，直接取 aarch64 版
+  local url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${iarch}.AppImage"
   local mirrors=("" "https://ghproxy.net/" "https://gh-proxy.com/" "https://ghfast.top/")
   local p
   for p in "${mirrors[@]}"; do
-    rm -f "$TOOLS/ai.AppImage"
+    rm -rf "$TOOLS/squashfs-root"
+    rm -f "$TOOLS/ai-$iarch.AppImage"
     # appimagetool 约 15MB，低于 1MB 视为失败
-    if wget -q -T 90 -t 2 -O "$TOOLS/ai.AppImage" "$p$url" \
-         && [ "$(stat -c%s "$TOOLS/ai.AppImage" 2>/dev/null || echo 0)" -gt 1000000 ]; then
-      chmod +x "$TOOLS/ai.AppImage"
-      if ( cd "$TOOLS" && ./ai.AppImage --appimage-extract >/dev/null 2>&1 ) \
+    if wget -q -T 90 -t 2 -O "$TOOLS/ai-$iarch.AppImage" "$p$url" \
+         && [ "$(stat -c%s "$TOOLS/ai-$iarch.AppImage" 2>/dev/null || echo 0)" -gt 1000000 ]; then
+      chmod +x "$TOOLS/ai-$iarch.AppImage"
+      if ( cd "$TOOLS" && "./ai-$iarch.AppImage" --appimage-extract >/dev/null 2>&1 ) \
            && [ -x "$TOOLS/squashfs-root/AppRun" ]; then
-        rm -rf "$TOOLS/appimagetool"
-        mv "$TOOLS/squashfs-root" "$TOOLS/appimagetool"
-        rm -f "$TOOLS/ai.AppImage"
-        echo "$TOOLS/appimagetool/AppRun"; return 0
+        rm -rf "$home"
+        mv "$TOOLS/squashfs-root" "$home"
+        rm -f "$TOOLS/ai-$iarch.AppImage"
+        echo "$home/AppRun"; return 0
       fi
     fi
   done
-  rm -f "$TOOLS/ai.AppImage"
+  rm -f "$TOOLS/ai-$iarch.AppImage"
   return 1
 }
 
@@ -334,7 +379,7 @@ make_appdir() { # $1=arch -> 打印 AppDir 路径
   local arch="$1" appdir="$WORK/AppDir-$arch"
   rm -rf "$appdir"
   mkdir -p "$appdir/usr/bin" "$appdir/usr/share/icons/hicolor/256x256/apps"
-  cp -a "$ROOT/out/linux-$arch/." "$appdir/usr/bin/"
+  cp -a "$(src_dir "$arch")/." "$appdir/usr/bin/"
   chmod +x "$appdir/usr/bin/TYWLauncher"
   install -Dm644 "$ICONS/tyw-256.png" "$appdir/usr/share/icons/hicolor/256x256/apps/$APP.png"
   cp "$ICONS/tyw-256.png" "$appdir/$APP.png"
@@ -353,11 +398,11 @@ SHX
 build_appimage() { # $1=arch
   local arch="$1" iarch; iarch="$(appimg_arch "$arch")"
   local tool rt
-  tool="$(ensure_appimagetool)" || { skip AppImage "没有 appimagetool 且下载失败"; return 0; }
+  tool="$(ensure_appimagetool "$iarch")" || { skip AppImage "没有 ${iarch} 版 appimagetool 且下载失败"; return 0; }
   rt="$(fetch_runtime "$iarch")" || { skip AppImage "type2 runtime 下载失败（离线？）"; return 0; }
   local appdir out
   appdir="$(make_appdir "$arch")"
-  out="$OUT/${APPNAME// /_}-${VER}-${iarch}.AppImage"
+  out="$OUT/${APPNAME// /_}-${VER}${CH_SUF}-${iarch}.AppImage"
   # appimagetool 自带联网下载 runtime，国内基本不通，这里显式指定
   if ARCH="$iarch" "$tool" --no-appstream --runtime-file "$rt" "$appdir" "$out" \
        >"$WORK/appimage-$arch.log" 2>&1 && [ -s "$out" ]; then
@@ -372,8 +417,14 @@ build_appimage() { # $1=arch
 
 # ================================================================ 主流程
 for arch in "${ARCHES[@]}"; do
-  [ -f "$ROOT/out/linux-$arch/TYWLauncher" ] || die "缺少 out/linux-${arch}，先执行 dotnet publish -r linux-$arch"
+  SRC="$(src_dir "$arch")"
+  [ -f "$SRC/TYWLauncher" ] || die "缺少 ${SRC}，先执行 dotnet publish -r linux-$arch"
   echo "[linux-$arch]"
+  # 地址只写进包里的 server.txt，源码里查不到；5 种格式都会带上它
+  if [ -n "$SRV_URL" ]; then
+    printf '%s\n' "$SRV_URL" > "$SRC/server.txt"
+    echo "已写入 server.txt：$SRV_URL"
+  fi
   build_tarball "$arch"
   build_deb     "$arch"
   build_rpm     "$arch"
@@ -384,7 +435,7 @@ done
 
 # 校验和
 ( cd "$OUT" && rm -f SHA256SUMS && \
-  find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | \
+  find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' -printf '%f\n' | sort | \
   xargs -r sha256sum > SHA256SUMS 2>/dev/null )
 ok "SHA256SUMS"
 
