@@ -42,7 +42,8 @@
 | `permissions` | 见第 3 节，**只能出现白名单里的值，出现未知值直接拒绝加载** |
 | `subscribe` | 想订阅的事件，同样只能出现事件白名单里的值 |
 
-包内约束：单文件 ≤ 2 MiB、整包解压后 ≤ 8 MiB、文件数 ≤ 64、禁止绝对路径 /
+包内约束：单文件 ≤ 8 MiB、整包解压后 ≤ 16 MiB（解释型扩展建议 2 MiB / 8 MiB 以内）、
+文件数 ≤ 64、禁止绝对路径 /
 `..` / ZIP Slip、禁止符号链接、禁止可执行位、禁止嵌套压缩包。
 
 ### 1.2 `.jar`（Java）
@@ -198,17 +199,52 @@ extensions/
 ├── sdk/python/tml_ext.py        Python SDK
 ├── sdk/node/tml_ext.js          Node.js SDK
 ├── sdk/java/…/TMLExt.java       Java SDK 基类
+├── sdk/go/tmlext.go             Go SDK（package tmlext，仅标准库）
+├── sdk/rust/                    Rust SDK（crate tml-ext，仅标准库）
 ├── examples/hello-python/       Python 示例（可直接打包）
 ├── examples/hello-node/         Node.js 示例
 ├── examples/hello-java/         Java 示例（含 manifest 与源码）
+├── examples/hello-go/           Go 示例（go build 出原生可执行）
+├── examples/hello-rust/         Rust 示例（cargo build 出原生可执行）
 └── pack.py                      把示例目录打成 .tmlext / .jar 并输出 SHA-256
+```
+
+**Go / Rust 的接入代码就在本仓库里**，不依赖任何独立模板仓库：
+
+| 语言 | SDK | 示例 | 打包 |
+| --- | --- | --- | --- |
+| Go | `sdk/go`（`package tmlext`，`go.mod` 可直接 `replace` 到本地） | `examples/hello-go` | `pack.py` 自动 `go build` |
+| Rust | `sdk/rust`（crate `tml-ext`，零依赖） | `examples/hello-rust` | `pack.py` 自动 `cargo build --release` |
+
+```go
+// Go：实现 Handler（Ready / OnEvent），Run 里完成握手并进入事件循环
+func main() { tmlext.Run(hello{}) }
+
+func (hello) Ready() {
+    tmlext.Log("info", "已就绪")
+    _ = tmlext.Subscribe("game.launched")
+}
+```
+
+```rust
+// Rust：实现 Handler trait（ready / event），run 里完成握手
+fn main() { tml_ext::run(Hello); }
+
+impl Handler for Hello {
+    fn ready(&mut self, ext: &mut Ext) { ext.log("info", "已就绪"); }
+}
 ```
 
 Python 与 Node 的 SDK 负责读 stdin、写 stdout、分发事件、发请求并等待响应；
 扩展作者只需写 `on_event` / 调 `Ext.log()` 之类的方法。Java SDK 同理，
 继承 `TMLExt` 覆写 `onEvent` 即可，主类由 SDK 提供 `main`。
+Go / Rust 的 SDK 做同一件事：`Run` 完成 `initialize` 握手、按 `id` 分发响应、
+把宿主广播的事件回调给 `Ready` / `OnEvent`（Rust 是 `ready` / `event`），
+`shutdown` 时干净退出。
 
-### 六种语言的官方模板仓库
+### 其它语言的独立模板仓库
+
+C 与其它语言仍保留了可独立 clone 的模板仓库（内容与本仓库同源，方便单语言开工）：
 
 | 运行时 | 仓库 | 说明 |
 | --- | --- | --- |
@@ -216,8 +252,6 @@ Python 与 Node 的 SDK 负责读 stdin、写 stdout、分发事件、发请求�
 | Node.js | <https://github.com/TYWStudio/template-tml-extension-node> | SDK + 示例 + 打包脚本 + CI |
 | Java | <https://github.com/TYWStudio/template-tml-extension-java> | 独立 JVM 进程，SDK 基类 + 示例 |
 | C | <https://github.com/TYWStudio/template-tml-extension-c> | 零依赖原生可执行，gcc / clang / MSVC |
-| Rust | <https://github.com/TYWStudio/template-tml-extension-rust> | 仅标准库，cargo / rustc |
-| Go | <https://github.com/TYWStudio/template-tml-extension-go> | 仅标准库，静态二进制 |
 
 模板仓库都带 `build.sh` / `build.bat`（编译 + 打包成 `.tmlext`）、`manifest.json`、
 `tests/smoke.py`（模拟宿主跑一遍协议）与 GitHub Actions 构建，克隆即可开工。
@@ -227,7 +261,16 @@ Python 与 Node 的 SDK 负责读 stdin、写 stdout、分发事件、发请求�
 ```bash
 python extensions/pack.py extensions/examples/hello-python
 # → hello-python.tmlext + hello-python.tmlext.sha256
+
+python extensions/pack.py extensions/examples/hello-go     # 需要 go
+python extensions/pack.py extensions/examples/hello-rust   # 需要 cargo
+# 原生扩展会就地编译出 manifest.entry 指向的二进制，再打进包里
 ```
+
+原生扩展的二进制由 `pack.py` 以 **0644**（不带可执行位）写进 zip，
+宿主解压后自己 `chmod +x`（Windows 上 `.exe` 自带执行位）。
+单文件上限因此对原生扩展放宽到 **8 MiB**、整包 **16 MiB**；
+解释型扩展仍建议控制在 2 MiB / 8 MiB 以内。
 
 ---
 

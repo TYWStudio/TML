@@ -1,0 +1,14 @@
+{
+  "format": "tmlext",
+  "apiVersion": 1,
+  "id": "com.tyw.demo.hellogo",
+  "name": "Hello Go",
+  "version": "1.0.0",
+  "author": "TYWStudio",
+  "description": "用 Go 写的 TML 扩展示例：仅标准库，编译成原生可执行文件，由宿主以独立进程拉起",
+  "runtime": "go",
+  "entry": "bin/tml_ext",
+  "platforms": ["windows", "linux", "macos"],
+  "permissions": ["log", "toast", "host.info", "instances.list", "events", "storage", "settings"],
+  "subscribe": ["launcher.started", "game.launched", "settings.changed"]
+}

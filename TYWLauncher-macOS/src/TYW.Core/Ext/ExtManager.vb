@@ -120,6 +120,14 @@ Namespace Global.TYW.Core.Ext
 
         Friend Shared ReadOnly IdRegex As New Regex("^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$", RegexOptions.CultureInvariant)
         Friend Shared ReadOnly ScriptEntryRegex As New Regex("^[A-Za-z0-9._/\-]+\.(py|js|mjs|cjs)$", RegexOptions.CultureInvariant)
+        Friend Shared ReadOnly NativeEntryRegex As New Regex("^[A-Za-z0-9._/\-]+$", RegexOptions.CultureInvariant)
+        Friend Shared ReadOnly NativeRuntimes As New HashSet(Of String) From {"c", "cpp", "rust", "go", "native", "zig"}
+
+        ''' <summary>该 runtime 是否按原生可执行文件处理（编译型语言，包内二进制直接执行，不套解释器）。</summary>
+        Friend Shared Function IsNativeRuntime(runtime As String) As Boolean
+            If String.IsNullOrEmpty(runtime) Then Return False
+            Return NativeRuntimes.Contains(runtime.Trim().ToLowerInvariant())
+        End Function
         Friend Shared ReadOnly ClassNameRegex As New Regex("^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)+$", RegexOptions.CultureInvariant)
         Friend Shared ReadOnly KeyRegex As New Regex("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)
 
@@ -307,9 +315,10 @@ Namespace Global.TYW.Core.Ext
             End If
             info.Sha256 = sha
 
-            ' 启用前探测 runtime，找不到一律禁用，绝不下载或安装
-            Dim runtimePath = FindRuntime(info.Runtime)
-            If String.IsNullOrEmpty(runtimePath) Then
+            ' 启用前探测 runtime，找不到一律禁用，绝不下载或安装；原生扩展（c / rust / go …）不需要解释器
+            Dim nativeExt = IsNativeRuntime(info.Runtime)
+            Dim runtimePath = If(nativeExt, "", FindRuntime(info.Runtime))
+            If String.IsNullOrEmpty(runtimePath) AndAlso Not nativeExt Then
                 SyncLock _lock
                     info.State = ExtState.[Error]
                     info.ErrorMessage = "缺少运行时：" & info.Runtime & "，请自行安装后重试"
@@ -629,8 +638,8 @@ Namespace Global.TYW.Core.Ext
 
         ''' <summary>读归档并做结构校验，返回清单 JSON 文本；任一失败即抛异常，绝不加载。</summary>
         Private Function ReadAndValidateArchive(filePath As String, isJar As Boolean) As String
-            Const MaxFile As Long = 2L * 1024 * 1024
-            Const MaxTotal As Long = 8L * 1024 * 1024
+            Const MaxFile As Long = 8L * 1024 * 1024
+            Const MaxTotal As Long = 16L * 1024 * 1024
             Const MaxEntries As Integer = 64
             Dim manifestName = If(isJar, "META-INF/tml-extension.json", "manifest.json")
             Dim manifestText As String = Nothing
@@ -645,11 +654,11 @@ Namespace Global.TYW.Core.Ext
                     If Not isDir Then
                         If EntryIsExecutable(e) Then Throw New Exception("归档含可执行位：" & e.FullName)
                         If IsNestedArchive(normalized) Then Throw New Exception("归档含嵌套压缩包：" & e.FullName)
-                        If e.Length > MaxFile Then Throw New Exception("单文件超过 2MiB：" & e.FullName)
+                        If e.Length > MaxFile Then Throw New Exception("单文件超过 8MiB：" & e.FullName)
                         total += e.Length
                         fileCount += 1
                         If fileCount > MaxEntries Then Throw New Exception("文件数超过 64")
-                        If total > MaxTotal Then Throw New Exception("解压总大小超过 8MiB")
+                        If total > MaxTotal Then Throw New Exception("解压总大小超过 16MiB")
                     End If
                     If String.Equals(normalized, manifestName, StringComparison.Ordinal) Then
                         If e.Length > 65536 Then Throw New Exception("清单文件过大")
@@ -694,8 +703,10 @@ Namespace Global.TYW.Core.Ext
                 Dim rt = GetRequiredString(r, "runtime")
                 If isJar Then
                     If rt <> "java" Then Throw New Exception("jar 的 runtime 必须为 java")
-                Else
-                    If rt <> "python3" AndAlso rt <> "node" Then Throw New Exception("tmlext 的 runtime 必须为 python3 或 node")
+                ElseIf Not IsNativeRuntime(rt) Then
+                    If rt <> "python3" AndAlso rt <> "node" Then
+                        Throw New Exception("tmlext 的 runtime 必须为 python3 / node，或原生运行时 c / cpp / rust / go / native / zig")
+                    End If
                 End If
                 info.Runtime = rt
 
@@ -703,6 +714,8 @@ Namespace Global.TYW.Core.Ext
                 If Not IsSafeEntry(entry) Then Throw New Exception("entry 路径不合法：" & entry)
                 If isJar Then
                     If Not ClassNameRegex.IsMatch(entry) Then Throw New Exception("jar 的 entry 必须为主类名")
+                ElseIf IsNativeRuntime(rt) Then
+                    If Not NativeEntryRegex.IsMatch(entry) Then Throw New Exception("原生扩展的 entry 必须为包内可执行文件路径")
                 Else
                     If Not ScriptEntryRegex.IsMatch(entry) Then Throw New Exception("tmlext 的 entry 必须为脚本路径")
                 End If
@@ -1075,10 +1088,12 @@ Namespace Global.TYW.Core.Ext
                 ' .tmlext 先解压到只读私有 pkg/ 目录
                 ExtractPackage(pkg)
                 entryFull = ResolveEntry(pkg, Info.Entry)
+                If ExtensionManager.IsNativeRuntime(Info.Runtime) Then MakeExecutable(entryFull)
             End If
 
+            Dim native = ExtensionManager.IsNativeRuntime(Info.Runtime)
             Dim psi As New ProcessStartInfo()
-            psi.FileName = _runtimePath
+            psi.FileName = If(native, entryFull, _runtimePath)
             psi.UseShellExecute = False
             psi.RedirectStandardInput = True
             psi.RedirectStandardOutput = True
@@ -1092,11 +1107,22 @@ Namespace Global.TYW.Core.Ext
                 psi.ArgumentList.Add("-cp")
                 psi.ArgumentList.Add(jarPath)
                 psi.ArgumentList.Add(mainClass)
-            Else
+            ElseIf Not native Then
                 psi.ArgumentList.Add(entryFull)
             End If
             ApplyEnvironment(psi)
             _psi = psi
+        End Sub
+
+        ''' <summary>原生扩展的二进制解压后没有执行位，宿主自己补（只 chmod +x，不做提权）。</summary>
+        Private Sub MakeExecutable(path As String)
+            Try
+                Dim psi As New ProcessStartInfo("chmod", "+x """ & path & """") With {
+                    .UseShellExecute = False, .CreateNoWindow = True}
+                Dim p = Process.Start(psi)
+                If p IsNot Nothing Then p.WaitForExit()
+            Catch
+            End Try
         End Sub
 
         Private Sub ExtractPackage(pkg As String)

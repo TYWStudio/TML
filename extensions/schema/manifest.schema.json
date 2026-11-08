@@ -17,7 +17,7 @@
     "version": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+){0,3}$", "maxLength": 24 },
     "author": { "type": "string", "maxLength": 80 },
     "description": { "type": "string", "maxLength": 500 },
-    "runtime": { "enum": ["python3", "node", "java"] },
+    "runtime": { "enum": ["python3", "node", "java", "c", "cpp", "rust", "go", "native", "zig"] },
     "entry": {
       "type": "string",
       "minLength": 1,
@@ -55,8 +55,35 @@
       "if": { "properties": { "format": { "const": "tmlext" } }, "required": ["format"] },
       "then": {
         "properties": {
-          "runtime": { "enum": ["python3", "node"] },
+          "runtime": { "enum": ["python3", "node", "c", "cpp", "rust", "go", "native", "zig"] }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "format": { "const": "tmlext" },
+          "runtime": { "enum": ["python3", "node"] }
+        },
+        "required": ["format", "runtime"]
+      },
+      "then": {
+        "properties": {
           "entry": { "pattern": "^[A-Za-z0-9._/\\-]+\\.(py|js|mjs|cjs)$" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "format": { "const": "tmlext" },
+          "runtime": { "enum": ["c", "cpp", "rust", "go", "native", "zig"] }
+        },
+        "required": ["format", "runtime"]
+      },
+      "then": {
+        "properties": {
+          "entry": { "pattern": "^[A-Za-z0-9._/\\-]+$" }
         }
       }
     },

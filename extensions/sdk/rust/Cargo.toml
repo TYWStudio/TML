@@ -1,0 +1,11 @@
+[package]
+name = "tml-ext"
+version = "1.0.0"
+edition = "2021"
+description = "TML Extension API v1 SDK（Rust，仅标准库）"
+license = "CC-BY-NC-4.0"
+repository = "https://github.com/TYWStudio/TML"
+readme = "README.md"
+publish = false
+
+[dependencies]

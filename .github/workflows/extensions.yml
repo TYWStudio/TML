@@ -1,0 +1,66 @@
+name: Extensions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'extensions/**'
+      - '.github/workflows/extensions.yml'
+  pull_request:
+    paths:
+      - 'extensions/**'
+  workflow_dispatch:
+
+jobs:
+  go:
+    name: Go 扩展（SDK + 示例 + 打包 + 协议自测）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: 编译 SDK 与示例
+        run: |
+          cd extensions/sdk/go && go vet ./... && go build ./...
+          cd ../../examples/hello-go && go build -trimpath -ldflags "-s -w" -o bin/tml_ext .
+      - name: 打包 .tmlext
+        run: python3 extensions/pack.py extensions/examples/hello-go
+      - name: 协议自测（模拟宿主）
+        run: python3 extensions/tests/smoke_native.py extensions/examples/hello-go/bin/tml_ext
+
+  rust:
+    name: Rust 扩展（SDK + 示例 + 打包 + 协议自测）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 编译 SDK 与示例
+        run: |
+          cargo build --release --manifest-path extensions/sdk/rust/Cargo.toml
+          cargo build --release --manifest-path extensions/examples/hello-rust/Cargo.toml
+      - name: 打包 .tmlext
+        run: python3 extensions/pack.py extensions/examples/hello-rust
+      - name: 协议自测（模拟宿主）
+        run: python3 extensions/tests/smoke_native.py extensions/examples/hello-rust/bin/tml_ext
+
+  manifest:
+    name: 清单 schema 与打包校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验 JSON
+        run: |
+          python3 -c "import json,sys; json.load(open('extensions/schema/manifest.schema.json')); json.load(open('extensions/examples/hello-go/manifest.json')); json.load(open('extensions/examples/hello-rust/manifest.json')); print('json ok')"
+      - name: 校验 pack.py 的清单规则
+        run: |
+          python3 - <<'EOF'
+          import importlib.util, json, pathlib
+          spec = importlib.util.spec_from_file_location("pack", "extensions/pack.py")
+          pack = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(pack)
+          for p in ("extensions/examples/hello-go", "extensions/examples/hello-rust",
+                    "extensions/examples/hello-python", "extensions/examples/hello-node"):
+              _, m = pack.load_manifest(pathlib.Path(p))
+              pack.validate(m)
+          print("manifest ok")
+          EOF

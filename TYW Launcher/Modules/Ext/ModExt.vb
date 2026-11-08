@@ -23,8 +23,8 @@ Public Module ModExt
     Public Const PlatformName As String = "windows"
 
     Friend Const MaxLineBytes As Integer = 64 * 1024
-    Friend Const MaxFileBytes As Long = 2 * 1024 * 1024
-    Friend Const MaxTotalBytes As Long = 8 * 1024 * 1024
+    Friend Const MaxFileBytes As Long = 8 * 1024 * 1024
+    Friend Const MaxTotalBytes As Long = 16 * 1024 * 1024
     Friend Const MaxFiles As Integer = 64
     Friend Const MaxExtensions As Integer = 8
     Friend Const MaxStorageBytes As Long = 1024 * 1024
@@ -415,9 +415,9 @@ Public Module ModExt
                 For Each entry As ZipArchiveEntry In zip.Entries
                     count += 1
                     If count > MaxFiles Then Throw New ExtApiException(-32600, "包内文件数超过 " & MaxFiles)
-                    If entry.Length > MaxFileBytes Then Throw New ExtApiException(-32600, "包内单文件超过 2 MiB：" & entry.FullName)
+                    If entry.Length > MaxFileBytes Then Throw New ExtApiException(-32600, "包内单文件超过 8 MiB：" & entry.FullName)
                     total += entry.Length
-                    If total > MaxTotalBytes Then Throw New ExtApiException(-32600, "解压后总大小超过 8 MiB")
+                    If total > MaxTotalBytes Then Throw New ExtApiException(-32600, "解压后总大小超过 16 MiB")
                     ' ZIP Slip / 绝对路径 / 反斜杠 / 盘符 防护
                     If Not SafeEntryName(entry.FullName) Then Throw New ExtApiException(-32600, "包内路径不合法：" & entry.FullName)
                     If String.Equals(entry.FullName.Replace("\"c, "/"c), manifestName, StringComparison.OrdinalIgnoreCase) Then
