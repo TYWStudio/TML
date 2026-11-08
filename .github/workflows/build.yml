@@ -21,16 +21,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 三配置对应三通道：Release=正式版，Snapshot=快照版，Debug=内测版
+          # 公开仓库只出两个通道：Release=正式版，Snapshot=快照版。
+          # 内测版（Debug / Beta）只在本地用 _deploy\build.py 构建，不进开源产物。
           - configuration: Release
             binary: TYW Launcher.exe
             artifact: TYWLauncher-windows-x64
           - configuration: Snapshot
             binary: TYW Launcher Snapshot.exe
             artifact: TYWLauncher-windows-x64-snapshot
-          - configuration: Debug
-            binary: TYW Launcher Beta.exe
-            artifact: TYWLauncher-windows-x64-beta
     # 服务端地址与 API 密钥都不写在仓库里：CI 在编译前临时注入 ModSecret.vb
     # （scripts/inject_secrets.py），工作区用完即销毁，源码永远只有空值。
     env:
@@ -81,7 +79,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # 三个通道的产物都在同一个 tag 里发，所以汇总后再上传，避免三个 job 抢同一个 Release
+  # 两个通道的产物都在同一个 tag 里发，所以汇总后再上传，避免两个 job 抢同一个 Release
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')

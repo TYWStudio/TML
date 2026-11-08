@@ -16,6 +16,8 @@ permissions:
 
 env:
   VERSION: '1.1.37'
+  # 公开仓库只出正式版 + 快照版。内测版（Beta）只在本地构建，不进开源产物。
+  TYW_CHANNELS: 'Release Snapshot'
 
 jobs:
   build:
@@ -47,7 +49,7 @@ jobs:
         continue-on-error: true
         run: python3 -m pip install --quiet --break-system-packages pillow || true
 
-      - name: Publish three channels
+      - name: Publish channels
         working-directory: TYWLauncher-macOS
         env:
           PYTHON: python3
@@ -72,6 +74,8 @@ jobs:
         working-directory: TYWLauncher-macOS
         run: |
           set -e
+          # dmg 数量必须等于 zip 数量（两种通道 × 每种一份），不写死 3
+          want=$(ls dist/TYWLauncher-macos-*.zip | wc -l | tr -d ' ')
           n=0
           for d in dist/TYWLauncher-macos-*.dmg; do
             [ -f "$d" ] || continue
@@ -83,7 +87,7 @@ jobs:
             hdiutil detach /tmp/dm >/dev/null
             n=$((n+1))
           done
-          test "$n" -eq 3
+          test "$n" -eq "$want"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

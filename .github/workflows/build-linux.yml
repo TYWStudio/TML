@@ -16,7 +16,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Linux ${{ matrix.arch }}
+    # 用同架构的 runner：AppImage 的打包工具是目标架构的二进制，交叉跑会 exec format error
+    runs-on: ${{ matrix.runner }}
     # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 注入，
     # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
     env:
@@ -27,8 +29,10 @@ jobs:
         include:
           - arch: x64
             rid: linux-x64
+            runner: ubuntu-24.04
           - arch: arm64
             rid: linux-arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,62 +42,76 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish three channels
+      # dpkg-deb 自带；rpm / zstd / mksquashfs 需要装
+      - name: Install packaging tools
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends rpm zstd squashfs-tools file
+          for t in dpkg-deb rpmbuild zstd mksquashfs; do
+            printf '%-12s %s\n' "$t" "$(command -v $t || echo 缺失)"
+          done
+
+      # 公开仓库只出正式版 + 快照版；内测版（Beta）只在本地用 build.py 构建
+      - name: Publish channels
         working-directory: TYWLauncher-Linux/src
         run: |
           set -e
-          for ch in Release Snapshot Beta; do
+          for ch in Release Snapshot; do
+            echo "::group::publish $ch"
             dotnet publish TYW.Desktop/TYW.Desktop.csproj \
               -c Release -r ${{ matrix.rid }} --self-contained true \
               -p:TYWChannel=$ch \
               -o "../out/ch-$ch"
+            echo "::endgroup::"
           done
 
-      - name: Package tar.gz
+      # 一次出全部 5 种包：tar.gz / deb / rpm / pkg.tar.zst / AppImage
+      # 版本号直接从源码取（ModApp.vb 的 Release 分支），避免和客户端对不上
+      - name: Package all formats
         working-directory: TYWLauncher-Linux
         run: |
           set -e
-          mkdir -p dist stage
-          ARCH=${{ matrix.arch }}
-          declare -A NAME=(
-            [Release]="TYWLauncher-linux-${ARCH}.tar.gz"
-            [Snapshot]="TYWLauncher-linux-${ARCH}-snapshot.tar.gz"
-            [Beta]="TYWLauncher-linux-${ARCH}-beta.tar.gz"
-          )
-          DESKTOP='[Desktop Entry]\nType=Application\nName=TYW Launcher\nGenericName=Minecraft Launcher\nExec=tyw-launcher\nIcon=tyw-launcher\nCategories=Game;\n'
-          WRAPPER='#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/TYWLauncher" "$@"\n'
-          for ch in Release Snapshot Beta; do
-            stage="stage/pkg-$ch/tyw-launcher-1.0.0"
-            mkdir -p "$stage"
-            cp -a "out/ch-$ch/." "$stage/"
-            cp packaging/icons/tyw-256.png "$stage/tyw-launcher.png"
-            printf "$DESKTOP" > "$stage/tyw-launcher.desktop"
-            printf "$WRAPPER" > "$stage/tyw-launcher"
-            chmod +x "$stage/tyw-launcher" "$stage/TYWLauncher"
-            # 服务端地址写进包内的 server.txt；地址来自 CI Secrets，仓库里查不到
-            if [ -n "${TYW_SERVER_URL:-}" ]; then
-              printf '%s\n' "$TYW_SERVER_URL" > "$stage/server.txt"
-            fi
-            tar -C "stage/pkg-$ch" -czf "dist/${NAME[$ch]}" tyw-launcher-1.0.0
-            rm -rf "stage/pkg-$ch"
+          VER="$(sed -n 's/.*Case Else : Return "\([0-9][0-9.]*\)".*/\1/p' src/TYW.Core/Base/ModApp.vb | head -1)"
+          [ -n "$VER" ] || { echo '::error::读不到版本号'; exit 1; }
+          echo "版本号：$VER"
+          for ch in Release Snapshot; do
+            echo "::group::package $ch"
+            TYW_CHANNEL="$ch" TYW_SRC_DIR="$PWD/out/ch-$ch" \
+              bash packaging/build.sh "$VER" ${{ matrix.arch }}
+            echo "::endgroup::"
           done
-          (cd dist && sha256sum TYWLauncher-linux-*.tar.gz > SHA256SUMS-linux-${ARCH}.txt)
-          ls -la dist/
+          if [ -n "${TYW_SERVER_URL:-}" ]; then
+            echo "已把服务端地址写进各包的 server.txt（地址本身不在仓库里）"
+          else
+            echo "::warning::未配置 TYW_SERVER_URL，本次产物为离线版"
+          fi
+
+          # 每种格式、每个通道都要有：2 通道 × 5 格式 = 10 个包
+          echo "--- dist ---"
+          ls -lh dist
+          n_tar=$(ls dist/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+          n_deb=$(ls dist/*.deb 2>/dev/null | wc -l | tr -d ' ')
+          n_rpm=$(ls dist/*.rpm 2>/dev/null | wc -l | tr -d ' ')
+          n_pac=$(ls dist/*.pkg.tar.zst 2>/dev/null | wc -l | tr -d ' ')
+          n_app=$(ls dist/*.AppImage 2>/dev/null | wc -l | tr -d ' ')
+          echo "tar.gz=$n_tar deb=$n_deb rpm=$n_rpm pacman=$n_pac appimage=$n_app"
+          for pair in "tar.gz:$n_tar" "deb:$n_deb" "rpm:$n_rpm" "pkg.tar.zst:$n_pac" "AppImage:$n_app"; do
+            [ "${pair#*:}" -ge 2 ] || { echo "::error::缺少 ${pair%:*} 包"; exit 1; }
+          done
+          cp dist/SHA256SUMS "dist/SHA256SUMS-linux-${{ matrix.arch }}.txt"
+          rm -f dist/SHA256SUMS
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TYWLauncher-linux-${{ matrix.arch }}
-          path: |
-            TYWLauncher-Linux/dist/*.tar.gz
-            TYWLauncher-Linux/dist/SHA256SUMS-linux-*.txt
+          path: TYWLauncher-Linux/dist/*
           if-no-files-found: error
 
       - name: Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            TYWLauncher-Linux/dist/*.tar.gz
-            TYWLauncher-Linux/dist/SHA256SUMS-linux-*.txt
+          files: TYWLauncher-Linux/dist/*
           generate_release_notes: true

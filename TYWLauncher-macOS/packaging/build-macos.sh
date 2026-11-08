@@ -4,9 +4,9 @@
 # 产物（dist/）：
 #   TYWLauncher-macos-arm64.zip          Apple Silicon 正式版
 #   TYWLauncher-macos-arm64-snapshot.zip 快照版
-#   TYWLauncher-macos-arm64-beta.zip     内测版
-#   TYWLauncher-macos-x64*.zip           Intel 版（同上三通道）
-#   TYWLauncher-macos-*.dmg              同上六种，仅 macOS 上生成（hdiutil）
+#   TYWLauncher-macos-arm64-beta.zip     内测版（只在本地构建，公开 CI 不出）
+#   TYWLauncher-macos-x64*.zip           Intel 版（同上）
+#   TYWLauncher-macos-*.dmg              同上，仅 macOS 上生成（hdiutil）
 #   SHA256SUMS-macos.txt
 #
 # zip 里是一个 "TYW Launcher.app"，解压后拖进「应用程序」即可。
@@ -17,6 +17,7 @@
 #   ./packaging/build-macos.sh                 # 版本号取默认，双架构三通道全出
 #   ./packaging/build-macos.sh 1.1.37          # 指定版本号
 #   ./packaging/build-macos.sh 1.1.37 arm64    # 只出 Apple Silicon
+#   TYW_CHANNELS="Release Snapshot" ./packaging/build-macos.sh   # 不出内测版
 #
 # 说明：
 #   * 可以在 Windows / Linux 上交叉编译（dotnet publish -r osx-*），
@@ -28,6 +29,17 @@ set -uo pipefail
 
 VER="${1:-1.1.37}"
 if [ "$#" -gt 1 ]; then shift; ARCHES=("$@"); else ARCHES=(arm64 x64); fi
+
+# 要出哪些通道。本地默认三通道全出；公开的 CI 只出 Release / Snapshot
+# （内测版只在本地构建，不进开源构建产物）：
+#   TYW_CHANNELS="Release Snapshot"
+CHANNELS="${TYW_CHANNELS:-Release Snapshot Beta}"
+for _ch in $CHANNELS; do
+  case "$_ch" in
+    Release|Snapshot|Beta) ;;
+    *) echo "未知通道：$_ch（应为 Release / Snapshot / Beta）" >&2; exit 1 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APPNAME="TYW Launcher"
@@ -99,7 +111,7 @@ for arch in "${ARCHES[@]}"; do
     *) echo "未知架构：${arch}（只支持 arm64 / x64）" >&2; exit 1 ;;
   esac
 
-  for ch in Release Snapshot Beta; do
+  for ch in $CHANNELS; do
     say "$rid $ch"
     out="$ROOT/out/macos-$arch-$ch"
     rm -rf "$out"

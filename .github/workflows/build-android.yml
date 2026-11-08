@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 三个通道各自是一个 buildType，产物落在 app/build/outputs/apk/<通道>/ 下
+          # 公开仓库只出两个通道的 APK；内测版（debug 风格）只在本地构建。
           - channel: release
             task: assembleRelease
             dir: release
@@ -28,11 +28,6 @@ jobs:
             dir: snapshot
             file: TYWLauncher-android-snapshot.apk
             output: TYWLauncher-android-snapshot.apk
-          - channel: beta
-            task: assembleDebug
-            dir: debug
-            file: TYWLauncher-android-beta.apk
-            output: TYWLauncher-android-beta.apk
 
     steps:
       - uses: actions/checkout@v4
