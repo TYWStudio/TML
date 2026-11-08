@@ -157,6 +157,9 @@ def build_native(src, manifest):
             raise SystemExit("cargo 没有产出可执行文件：" + str(built))
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(built, exe)
+        if os.name != "nt":
+            # cargo 产物拷出来会丢掉执行位，补回去（进包时仍统一写成 0644）
+            os.chmod(exe, 0o755)
     else:
         raise SystemExit("runtime=%s 的二进制需要自己先编译好放到 %s" % (runtime, entry))
     if not exe.exists() and not target.exists():

@@ -119,6 +119,8 @@ def main():
     binary = os.path.abspath(sys.argv[1])
     if not os.path.isfile(binary):
         raise SystemExit("找不到可执行文件：" + binary)
+    if os.name != "nt" and not os.access(binary, os.X_OK):
+        os.chmod(binary, 0o755)  # 手工拷出来的产物常常没有执行位
 
     workdir = tempfile.mkdtemp(prefix="tml-ext-smoke-")
     host = Host(binary, workdir)
