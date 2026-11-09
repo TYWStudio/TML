@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      server_url:
+        description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
+        required: false
+        default: ''
 
 permissions:
   contents: write

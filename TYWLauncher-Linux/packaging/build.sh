@@ -69,12 +69,10 @@ src_dir() { # $1=arch
   fi
 }
 
-# 官方发行包注入服务端地址（开源仓库默认不带任何地址）。
-# TYW_SERVER_URL 优先，其次 packaging/server_url.txt（本机发版用，不入仓库）。
-SRV_URL="${TYW_SERVER_URL:-}"
-if [ -z "$SRV_URL" ] && [ -f "$ROOT/packaging/server_url.txt" ]; then
-  SRV_URL="$(head -n 1 "$ROOT/packaging/server_url.txt" | tr -d '\r\n')"
-fi
+# 服务端地址只在**编译期**进二进制，产物里不放 server.txt：
+#   CI 用 scripts/inject_server_url.py --platform linux apply 注入 ModServerUrl.vb；
+#   本机发版可直接在源码常量里写，或同样用注入脚本。
+# 想换服务端：设置 → 启动器 → 服务端地址，或环境变量 TYW_SERVER，都不用重新打包。
 
 mkdir -p "$OUT"
 rm -rf "$WORK"
@@ -449,10 +447,11 @@ for arch in "${ARCHES[@]}"; do
   SRC="$(src_dir "$arch")"
   [ -f "$SRC/TYWLauncher" ] || die "缺少 ${SRC}，先执行 dotnet publish -r linux-$arch"
   echo "[linux-$arch]"
-  # 地址只写进包里的 server.txt，源码里查不到；5 种格式都会带上它
-  if [ -n "$SRV_URL" ]; then
-    printf '%s\n' "$SRV_URL" > "$SRC/server.txt"
-    echo "已写入 server.txt：$SRV_URL"
+  # 地址已编译进二进制；publish 目录里若残留 server.txt 一律清掉，
+  # 保证 tar.gz / deb / rpm / pkg.tar.zst / AppImage 五种包都不带它。
+  if [ -f "$SRC/server.txt" ]; then
+    rm -f "$SRC/server.txt"
+    echo "已清理 $SRC/server.txt（产物不带该文件）"
   fi
   build_tarball "$arch"
   build_deb     "$arch"

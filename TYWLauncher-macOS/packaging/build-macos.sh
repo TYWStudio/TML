@@ -87,7 +87,8 @@ if s2 == s:
 io.open(path, "w", encoding="utf-8-sig", newline="").write(s2)
 PY
   [ $? -eq 0 ] || { echo "注入服务端地址失败" >&2; exit 1; }
-  ok "已注入服务端地址：$SERVER_URL"
+  # CI 日志是公开的，只打掩码
+  ok "已注入服务端地址：${SERVER_URL:0:8}***(${#SERVER_URL})"
 else
   warn "未设置 TYW_SERVER_URL / server_url.txt，产物为离线版（不带任何服务器地址）"
 fi

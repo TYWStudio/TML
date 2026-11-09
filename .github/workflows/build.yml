@@ -55,21 +55,16 @@ jobs:
       - name: Build ${{ matrix.configuration }}
         run: msbuild "TYW Launcher\TYW Launcher.vbproj" /restore /t:Build /p:Configuration=${{ matrix.configuration }} /m /nologo /v:m
 
-      # 双保险：exe 旁边也放一份 server.txt（客户端读它的优先级高于编译期常量，
-      # 用户想指到自己的服务端时改这个文件即可，不用重新编译）
-      - name: Package (exe + server.txt)
+      # 服务端地址已经在编译期注入 exe（ModSecret.vb 的 BuiltInServerAddress）。
+      # 产物里只有 exe，不再附带任何 server.txt；想换服务端用「设置 → 启动器 → 服务端地址」
+      # 或环境变量 TYW_SERVER，都不需要重新编译。
+      - name: Package (exe only)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item "TYW Launcher/bin/${{ matrix.configuration }}/TYW Launcher.exe" "dist/${{ matrix.binary }}"
-          if ($env:TYW_SERVER_URL) {
-            $u = $env:TYW_SERVER_URL.Trim()
-            if (-not $u.EndsWith('/')) { $u = "$u/" }
-            [IO.File]::WriteAllText("$PWD/dist/server.txt", "$u`n", (New-Object Text.UTF8Encoding($false)))
-            Write-Host "server.txt -> $u"
-          } else {
-            Write-Host "::warning::未配置 TYW_SERVER_URL，本次产物为离线版"
-          }
+          if (-not $env:TYW_SERVER_URL) { Write-Host "::warning::未配置 TYW_SERVER_URL，本次产物为离线版" }
+          if (Test-Path "$PWD/dist/server.txt") { throw "产物里出现了 server.txt，构建配置有误" }
           Get-ChildItem dist | Format-Table Name,Length | Out-String
 
       - name: Upload artifact

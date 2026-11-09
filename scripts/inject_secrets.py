@@ -104,10 +104,16 @@ def apply(quiet=False):
                 print('  %-22s 空（离线/开源默认值）' % const_name, flush=True)
             continue
         pattern = r'(Public Const ' + const_name + r' As String = )"[^"]*"'
-        new_text = re.sub(pattern, lambda m: m.group(1) + '"' + _vb_escape(value) + '"', text, count=1)
-        if new_text == text:
+        if re.search(pattern, text) is None:
             result[const_name] = False
             print('  %-22s 注入失败：ModSecret.vb 里找不到该常量' % const_name, flush=True)
+            continue
+        new_text = re.sub(pattern, lambda m: m.group(1) + '"' + _vb_escape(value) + '"', text, count=1)
+        if new_text == text:
+            # 本机工作副本的源码本来就写着真实值（local_secrets.py apply），无需改动
+            result[const_name] = True
+            if not quiet:
+                print('  %-22s 已就位（源码里本来就是该值）' % const_name, flush=True)
             continue
         text = new_text
         result[const_name] = True

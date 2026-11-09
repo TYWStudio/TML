@@ -19,7 +19,8 @@ jobs:
     name: Linux ${{ matrix.arch }}
     # 用同架构的 runner：AppImage 的打包工具是目标架构的二进制，交叉跑会 exec format error
     runs-on: ${{ matrix.runner }}
-    # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 注入，
+    # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 在**编译期**注入
+    # ModServerUrl.vb 的 BuiltIn 常量，产物里不放任何 server.txt。
     # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
@@ -52,6 +53,14 @@ jobs:
             printf '%-12s %s\n' "$t" "$(command -v $t || echo 缺失)"
           done
 
+      # 官方发行包在这里才把地址填进编译期常量；没有 Secrets 的 fork 保持空值 = 纯离线版。
+      # 必须在 publish 之前执行：地址只存在于编译后的二进制里，五个包都不会带 server.txt。
+      - name: Inject server url (compile-time)
+        working-directory: TYWLauncher-Linux
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python3 ../scripts/inject_server_url.py --platform linux apply
+
       # 公开仓库只出正式版 + 快照版；内测版（Beta）只在本地用 build.py 构建
       - name: Publish channels
         working-directory: TYWLauncher-Linux/src
@@ -83,10 +92,17 @@ jobs:
             echo "::endgroup::"
           done
           if [ -n "${TYW_SERVER_URL:-}" ]; then
-            echo "已把服务端地址写进各包的 server.txt（地址本身不在仓库里）"
+            echo "服务端地址已在编译期注入二进制（值来自 Secrets，仓库与产物文件里都没有）"
           else
             echo "::warning::未配置 TYW_SERVER_URL，本次产物为离线版"
           fi
+          # 所有平台都不带 server.txt：逐个 tar.gz 复核
+          for f in dist/*.tar.gz; do
+            if tar -tzf "$f" | grep -q 'server\.txt$'; then
+              echo "::error::$f 里出现了 server.txt"; exit 1
+            fi
+          done
+          echo "已确认包内不含 server.txt"
 
           # 每种格式、每个通道都要有：2 通道 × 5 格式 = 10 个包
           echo "--- dist ---"
