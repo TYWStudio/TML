@@ -44,6 +44,9 @@ fun SettingsPage(
     var customLight by remember { mutableIntStateOf(Settings.getInt("UiLauncherLight", 0)) }
     var showBetaDialog by remember { mutableStateOf(false) }
     var betaInput by remember { mutableStateOf(Settings.betaCode) }
+
+    var storeCats by remember { mutableStateOf<List<Store.StoreCategory>?>(null) }
+    var storeLoading by remember { mutableStateOf(false) }
     var downloading by remember { mutableStateOf("") }
     var dlProgress by remember { mutableFloatStateOf(0f) }
 
@@ -226,6 +229,64 @@ fun SettingsPage(
                 }
             }
             HintText("开源版不带任何服务器地址：不填就纯本地运行，公告、启动器更新、内测码校验、封禁查询、匿名上报全部关闭。四端接同一个服务端，地址格式与 Windows / Linux / macOS 版一致。")
+        }
+
+
+        // ===== 拓展商店 =====
+        TywCard("拓展商店") {
+            SettingRow("应用凭证") { ValueText(Store.keyMasked()) }
+            HintText("从官方下载站浏览并一键导入拓展。未配置应用凭证时列表为空（开源版默认不连下载站）。")
+            if (storeLoading) {
+                LinearProgressIndicator(progress = { 1f }, modifier = Modifier.fillMaxWidth())
+                Text("正在从下载站加载……", fontSize = 11.sp, color = p.textHint)
+            } else if (storeCats != null) {
+                val cats = storeCats!!
+                if (cats.isEmpty()) {
+                    Text("暂无内容（可能未配置应用凭证，或下载站没有上架拓展）。", fontSize = 11.sp, color = p.textHint)
+                } else {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        for (cat in cats) {
+                            if (cat.name.isBlank()) continue
+                            Text(cat.name, fontSize = 14.sp, color = p.c1)
+                            if (cat.tagline.isNotBlank())
+                                Text(cat.tagline, fontSize = 11.5.sp, color = p.textHint)
+                            for (pr in cat.projects) {
+                                Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(pr.name, fontSize = 13.sp, color = p.c1)
+                                        if (pr.tagline.isNotBlank())
+                                            Text(pr.tagline, fontSize = 11.sp, color = p.textHint)
+                                    }
+                                    TywButton("安装", highlight = true) {
+                                        scope.launch {
+                                            try {
+                                                Store.downloadAndInstall(pr, context.cacheDir)
+                                                Toast.makeText(context, "已导入拓展：${pr.name}，可在拓展页启用。", Toast.LENGTH_SHORT).show()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "安装失败：${e.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TywButton("刷新列表", highlight = true) {
+                    storeLoading = true
+                    scope.launch {
+                        try {
+                            storeCats = Store.fetchTree()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "加载失败：${e.message}", Toast.LENGTH_LONG).show()
+                        } finally {
+                            storeLoading = false
+                        }
+                    }
+                }
+            }
         }
 
         // ===== 关于与更新 =====
