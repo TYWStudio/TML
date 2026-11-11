@@ -29,6 +29,7 @@ jobs:
     # 服务端地址来自仓库 Secrets 的 TYW_SERVER_URL，源码里不出现
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
+      TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
     strategy:
       fail-fast: false
       matrix:
