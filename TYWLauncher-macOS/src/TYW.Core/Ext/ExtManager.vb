@@ -204,7 +204,7 @@ Namespace Global.TYW.Core.Ext
                         ParseManifest(json, isJar, info)
                         info.Sha256 = ComputeSha256(f)
                         ' 包内容变化 -> 清信任并（在下方对账里）自动禁用
-                        Dim trusted = ReadTrust(info.Id)
+                        Dim trusted = ReadTrust(ei.Id)
                         If trusted IsNot Nothing AndAlso Not String.Equals(trusted, info.Sha256, StringComparison.OrdinalIgnoreCase) Then
                             ClearTrust(info.Id)
                             SafeLog("warn", "[ExtManager] 扩展 " & info.Id & " 包 SHA-256 已变化，已清除信任")
@@ -294,7 +294,7 @@ Namespace Global.TYW.Core.Ext
             ' 重新计算包 SHA-256 并检测包内容变化
             Dim sha As String
             Try
-                sha = ComputeSha256(info.FilePath)
+                sha = ComputeSha256(ei.FilePath)
             Catch ex As Exception
                 SyncLock _lock
                     info.State = ExtState.[Error]
@@ -394,7 +394,7 @@ Namespace Global.TYW.Core.Ext
             SafeLog("info", "[ExtManager] 已复制拓展包到 " & dest)
             Dim list = Scan()
             Dim id As String = Nothing
-            For Each info In list
+            For Each ei In list
                 If String.Equals(info.FilePath, dest, StringComparison.OrdinalIgnoreCase) Then
                     id = info.Id
                     Exit For
