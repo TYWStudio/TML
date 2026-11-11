@@ -26,7 +26,8 @@ android {
 
         // 服务端地址：开源仓库默认空（不连任何服务器）。
         // 官方发行包在构建时用环境变量 TYW_SERVER_URL 注入，运行期还能在设置里改。
-        buildConfigField("String", "SERVER_ADDRESS", "\"${System.getenv("TYW_SERVER_URL") ?: ""}\"")
+        buildConfigField("String", "SERVER_ADDRESS",         buildConfigField("String", "STORE_API_KEY", "${System.getenv("TYW_STORE_API_KEY") ?: ""}")
+"\"${System.getenv("TYW_SERVER_URL") ?: ""}\"")
     }
 
     buildFeatures {
