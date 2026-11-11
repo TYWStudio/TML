@@ -36,6 +36,7 @@ jobs:
       PCL_MS_CLIENT_ID: ${{ secrets.PCL_MS_CLIENT_ID }}
       PCL_CURSEFORGE_API_KEY: ${{ secrets.PCL_CURSEFORGE_API_KEY }}
       TYW_CLS_URL: ${{ secrets.TYW_CLS_URL }}
+      TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
