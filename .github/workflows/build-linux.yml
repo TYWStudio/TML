@@ -24,6 +24,7 @@ jobs:
     # 手动触发时填的 server_url 优先（方便临时指向别的服务器）。
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
+      TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
     strategy:
       fail-fast: false
       matrix:
