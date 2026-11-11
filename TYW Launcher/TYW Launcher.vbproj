@@ -278,6 +278,7 @@
     <Compile Include="Modules\Minecraft\ModWatcher.vb" />
     <Compile Include="Modules\ModBeta.vb" />
     <Compile Include="Modules\ModSecret.vb" />
+    <Compile Include="Modules\ModStore.vb" />
     <Compile Include="Modules\Ext\ModExt.vb" />
     <Compile Include="Modules\Ext\ModExtHost.vb" />
     <Compile Include="Modules\ModUpdateLog.vb" />
