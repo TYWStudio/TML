@@ -16,6 +16,7 @@ Public Module ModServerUrl
 
     ''' <summary>编译期注入的默认地址。开源仓库里恒为空，由打包脚本在构建前替换这一行。</summary>
     Public Const BuiltIn As String = ""
+    Public Const BuiltInStoreApiKey As String = ""
 
     Private _cached As String = Nothing
 
