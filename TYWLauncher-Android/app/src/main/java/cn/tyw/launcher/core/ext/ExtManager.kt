@@ -301,6 +301,35 @@ object ExtManager {
         return snapshot
     }
 
+
+    /**
+     * 从本地临时文件安装拓展包：复制到扩展根目录 → 重新扫描 → 默认放入扩展目录（禁用状态），
+     * 等用户在拓展页确认权限清单后启用。userConfirmed=true 时顺带尝试启用。
+     */
+    fun installPackage(localPath: String, userConfirmed: Boolean = true): Boolean {
+        val src = File(localPath)
+        if (!src.isFile) { logFn("安装扩展失败：源文件不存在 $localPath"); return false }
+        val root = rootDirProvider()
+        if (!root.exists()) root.mkdirs()
+        val dest = File(root, src.name)
+        try {
+            src.inputStream().use { ins -> dest.outputStream().use { outs -> ins.copyTo(outs) } }
+        } catch (e: Exception) {
+            logFn("安装扩展失败：复制出错 ${e.message}")
+            return false
+        }
+        val list = scan()
+        val id = list.firstOrNull { f -> File(f.filePath).name.equals(dest.name, true) }?.id
+        if (id == null) { logFn("安装扩展失败：扫描未找到刚复制的包 ${dest.absolutePath}"); return false }
+        if (!userConfirmed) {
+            logFn("扩展已放入扩展目录，等待用户在拓展页启用：$id")
+            return true
+        }
+        val enabled = enable(id, true)
+        if (!enabled) logFn("扩展已放入扩展目录（$id），但自动启用失败（可能缺少运行时），可在拓展页手动启用。")
+        return true
+    }
+
     /** 返回当前已发现扩展的快照。 */
     fun getAll(): List<ExtInfo> = synchronized(lock) { extensions.values.toList() }
 
