@@ -377,6 +377,44 @@ Namespace Global.TYW.Core.Ext
             Return enabled
         End Function
 
+    ''' <summary>
+    ''' 从本地临时文件安装拓展包：复制到拓展根目录 → 重新扫描 → 在用户确认后启用。
+    ''' userConfirmed=False 时只把包放进拓展目录，等待用户在拓展页手动启用。
+    ''' </summary>
+    Public Function InstallPackage(localPath As String, userConfirmed As Boolean) As Boolean
+        Try
+            Dim root = RootDir()
+            If String.IsNullOrWhiteSpace(root) Then
+                SafeLog("warn", "[ExtManager] 未配置扩展根目录，无法安装拓展包")
+                Return False
+            End If
+            Directory.CreateDirectory(root)
+            Dim dest = Path.Combine(root, Path.GetFileName(localPath))
+            File.Copy(localPath, dest, True)
+            SafeLog("info", "[ExtManager] 已复制拓展包到 " & dest)
+            Dim list = Scan()
+            Dim id As String = Nothing
+            For Each info In list
+                If String.Equals(info.FilePath, dest, StringComparison.OrdinalIgnoreCase) Then
+                    id = info.Id
+                    Exit For
+                End If
+            Next
+            If id Is Nothing Then
+                SafeLog("warn", "[ExtManager] 安装后未扫描到拓展：" & dest)
+                Return False
+            End If
+            If Not userConfirmed Then
+                SafeLog("info", "[ExtManager] 拓展已放入拓展目录，等待用户在拓展页启用：" & id)
+                Return True
+            End If
+            Return Enable(id, True)
+        Catch ex As Exception
+            SafeLog("error", "[ExtManager] 安装拓展包失败：" & ex.Message)
+            Return False
+        End Try
+    End Function
+
         ''' <summary>向已启用且 manifest.subscribe 含该事件的扩展广播（事件白名单 + 数据脱敏）。</summary>
         Public Sub Broadcast(eventType As String, data As Object)
             If String.IsNullOrEmpty(eventType) OrElse Not EventWhitelist.Contains(eventType) Then
