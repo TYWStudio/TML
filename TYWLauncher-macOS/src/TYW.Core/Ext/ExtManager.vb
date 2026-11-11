@@ -204,7 +204,7 @@ Namespace Global.TYW.Core.Ext
                         ParseManifest(json, isJar, info)
                         info.Sha256 = ComputeSha256(f)
                         ' 包内容变化 -> 清信任并（在下方对账里）自动禁用
-                        Dim trusted = ReadTrust(ei.Id)
+                        Dim trusted = ReadTrust(info.Id)
                         If trusted IsNot Nothing AndAlso Not String.Equals(trusted, info.Sha256, StringComparison.OrdinalIgnoreCase) Then
                             ClearTrust(info.Id)
                             SafeLog("warn", "[ExtManager] 扩展 " & info.Id & " 包 SHA-256 已变化，已清除信任")
@@ -294,7 +294,7 @@ Namespace Global.TYW.Core.Ext
             ' 重新计算包 SHA-256 并检测包内容变化
             Dim sha As String
             Try
-                sha = ComputeSha256(ei.FilePath)
+                sha = ComputeSha256(info.FilePath)
             Catch ex As Exception
                 SyncLock _lock
                     info.State = ExtState.[Error]
@@ -414,6 +414,12 @@ Namespace Global.TYW.Core.Ext
             Return False
         End Try
     End Function
+
+    ''' <summary>
+    ''' 从本地临时文件安装拓展包：复制到拓展根目录 → 重新扫描 → 在用户确认后启用。
+    ''' userConfirmed=False 时只把包放进拓展目录，等待用户在拓展页手动启用。
+    ''' </summary>
+
 
     ''' <summary>
     ''' 从本地临时文件安装拓展包：复制到拓展根目录 → 重新扫描 → 在用户确认后启用。
