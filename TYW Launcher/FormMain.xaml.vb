@@ -1183,6 +1183,7 @@ Public Class FormMain
         SetupUI = 2
         SetupSystem = 3
         SetupExt = 4
+        SetupStore = 5
         LinkMain = 0
         OtherHelp = 0
         OtherAbout = 1

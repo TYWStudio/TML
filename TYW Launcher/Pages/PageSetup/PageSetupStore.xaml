@@ -1,0 +1,42 @@
+<local:MyPageRight
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:PCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    mc:Ignorable="d" x:Class="PageSetupStore"
+    PanScroll="PanBack" RenderOptions.BitmapScalingMode="LowQuality">
+    <Grid>
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+        <StackPanel x:Name="PanMain" Margin="25,10" Grid.IsSharedSizeScope="True">
+            <local:MyCard Margin="0,15" Title="拓展商店">
+                <Grid Margin="21,40,21,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="14" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="14" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Margin="0,0,0,0" TextWrapping="Wrap" LineHeight="19"
+                               Text="从下载站获取并一键导入启动器拓展。分类与项目由下载站维护，可无限新增；这里只负责展示与安装。" />
+                    <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <local:MyButton x:Name="BtnRefresh" Text="刷新" Width="110" Padding="13,0" Margin="0,0,15,0" ColorType="Highlight" />
+                        <local:MySearchBox x:Name="SearchBox" Width="240" HintText="搜索拓展…" Margin="0,0,15,0" />
+                        <TextBlock VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource ColorBrushGray4}"
+                                   Text="应用凭证：" />
+                        <TextBlock x:Name="LabKey" VerticalAlignment="Center" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource ColorBrushGray3}"
+                                   Text="……" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="4" x:Name="LabStatus" Margin="0,0,0,0" FontSize="12.5"
+                               Foreground="{DynamicResource ColorBrushGray3}" Text="正在加载拓展列表……" />
+                </Grid>
+            </local:MyCard>
+            <local:MyCard Margin="0,0,0,15" Title="分类">
+                <WrapPanel x:Name="PanCats" Margin="21,14,21,16" Orientation="Horizontal" />
+            </local:MyCard>
+            <StackPanel x:Name="PanProjects" Margin="0,0,0,15" />
+        </StackPanel>
+    </local:MyScrollViewer>
+    </Grid>
+</local:MyPageRight>

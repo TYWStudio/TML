@@ -19,6 +19,11 @@ Friend Module ModSecret
     Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), BuiltInOAuthClientId)
     'CurseForge API Key
     Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), BuiltInCurseForgeKey)
+    '★ 拓展商店访问下载站 API 用的应用凭证密钥（X-Api-Key）。编译期由 inject_secrets 注入，源码恒空；
+    '   运行时环境变量可覆盖（调试用）。该密钥用于绕过下载站「来源域名 / IP 白名单」，让启动器在任意
+    '   客户端上都可信地读取 / 下载；密钥只在内存里使用、只以掩码形式展示，绝不明文打印或落盘。
+    Public Const BuiltInStoreApiKey As String = ""
+    Public StoreApiKey As String = If(Environment.GetEnvironmentVariable("TYW_STORE_API_KEY"), BuiltInStoreApiKey)
     'TYW Launcher 自建服务端地址（公告 / 启动器更新下载，须以 / 结尾）
     '
     '★ 开源版默认留空 ★ 仓库里不带任何服务器地址，所有服务端功能（公告、自动更新、

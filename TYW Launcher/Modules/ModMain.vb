@@ -408,6 +408,7 @@ EndHint:
     Public FrmSetupSystem As PageSetupSystem
     Public FrmSetupLink As PageSetupLink
     Public FrmSetupExt As PageSetupExt
+    Public FrmSetupStore As PageSetupStore
 
     '其他页面声明
     Public FrmOtherLeft As PageOtherLeft

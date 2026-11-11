@@ -38,6 +38,7 @@ PLACEHOLDERS = [
     ('BuiltInOAuthClientId', 'PCL_MS_CLIENT_ID', 'client_id.txt', False),
     ('BuiltInCurseForgeKey', 'PCL_CURSEFORGE_API_KEY', 'curseforge_key.txt', False),
     ('ClsBaseUrl', 'TYW_CLS_URL', 'cls_url.txt', False),
+    ('BuiltInStoreApiKey', 'TYW_STORE_API_KEY', 'store_api_key.txt', False),
 ]
 
 _BACKUP = None  # 原始文件内容（带 BOM 的原始 bytes 解码后），restore 用
