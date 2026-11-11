@@ -1,7 +1,9 @@
 Imports System.IO
+Imports System.Net
 Imports System.Net.Http
 Imports System.Text
 Imports System.Text.Json
+Imports TYW.Core.Ext
 
 ''' <summary>
 ''' 拓展商店：从下载站（downloads.tywmc.cn）拉取「分支项目树」并在设置里展示，
