@@ -44,6 +44,7 @@ public static class SettingsPage
                 host.Children.Add(SystemCard());
                 host.Children.Add(ChannelCard());
                 host.Children.Add(ServerCard());
+                host.Children.Add(StoreCard());
                 break;
         }
         return host;
@@ -743,6 +744,153 @@ public static class SettingsPage
         if (bytes >= 1L << 20) return Math.Round(bytes / 1024.0 / 1024, 1) + " MB";
         if (bytes >= 1024) return Math.Round(bytes / 1024.0, 1) + " KB";
         return bytes + " B";
+    }
+
+
+    // ================= 拓展商店 =================
+
+    /// <summary>拓展商店：从官方下载站拉取分类/项目并一键导入拓展（.tmlext/.jar）。</summary>
+    private static Control StoreCard()
+    {
+        var (card, stack) = NewCard("拓展商店");
+        stack.Children.Add(Row("应用凭证", Value(ModStore.StoreKeyMasked())));
+        stack.Children.Add(new TextBlock
+        {
+            Text = "从官方下载站浏览并一键导入拓展。未配置应用凭证时列表为空（开源版默认不连下载站）。",
+            FontSize = 11.5,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrushGray3"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 4)
+        });
+
+        var listPanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 4, 0, 0) };
+        var status = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrushGray2"),
+            Text = "点击「刷新列表」从下载站加载拓展。"
+        };
+
+        var btnRefresh = new PclButton { Text = "刷新列表", Height = 30, Width = 110 };
+        btnRefresh.Click += async (_, _) =>
+        {
+            listPanel.Children.Clear();
+            status.Text = "正在从下载站加载……";
+            btnRefresh.IsEnabled = false;
+            try
+            {
+                var cats = await Task.Run(() => ModStore.FetchTree());
+                listPanel.Children.Clear();
+                if (cats == null || cats.Count == 0)
+                {
+                    status.Text = "暂无内容（可能未配置应用凭证，或下载站没有上架拓展）。";
+                    return;
+                }
+                foreach (var cat in cats)
+                {
+                    if (string.IsNullOrWhiteSpace(cat.Name)) continue;
+                    listPanel.Children.Add(new TextBlock
+                    {
+                        Text = cat.Name,
+                        FontSize = 14,
+                        FontWeight = FontWeight.Bold,
+                        FontFamily = Pcl.FontFamily,
+                        Foreground = Pcl.Res("ColorBrush1"),
+                        Margin = new Thickness(0, 6, 0, 2)
+                    });
+                    if (!string.IsNullOrWhiteSpace(cat.Tagline))
+                        listPanel.Children.Add(new TextBlock
+                        {
+                            Text = cat.Tagline,
+                            FontSize = 11.5,
+                            FontFamily = Pcl.FontFamily,
+                            Foreground = Pcl.Res("ColorBrushGray3"),
+                            TextWrapping = TextWrapping.Wrap
+                        });
+                    foreach (var pr in cat.Projects)
+                        listPanel.Children.Add(ProjectRow(pr));
+                }
+                status.Text = "";
+            }
+            catch (Exception ex)
+            {
+                status.Text = "加载失败：" + ex.Message;
+            }
+            finally
+            {
+                btnRefresh.IsEnabled = true;
+            }
+        };
+
+        stack.Children.Add(btnRefresh);
+        stack.Children.Add(listPanel);
+        stack.Children.Add(status);
+        return card;
+    }
+
+    private static Control ProjectRow(ModStore.StoreProject pr)
+    {
+        var grid = new Grid { MinHeight = 38, Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(new TextBlock
+        {
+            Text = pr.Name,
+            FontSize = 13,
+            FontFamily = Pcl.FontFamily,
+            Foreground = Pcl.Res("ColorBrush1")
+        });
+        if (!string.IsNullOrWhiteSpace(pr.Tagline))
+            left.Children.Add(new TextBlock
+            {
+                Text = pr.Tagline,
+                FontSize = 11,
+                FontFamily = Pcl.FontFamily,
+                Foreground = Pcl.Res("ColorBrushGray3"),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+        if (!string.IsNullOrWhiteSpace(pr.SizeHuman) || pr.Downloads > 0)
+        {
+            var meta = (pr.Downloads > 0 ? (pr.Downloads + " 次下载") : "");
+            if (!string.IsNullOrWhiteSpace(pr.SizeHuman)) meta += (meta.Length > 0 ? " · " : "") + pr.SizeHuman;
+            left.Children.Add(new TextBlock
+            {
+                Text = meta,
+                FontSize = 10.5,
+                FontFamily = Pcl.FontFamily,
+                Foreground = Pcl.Res("ColorBrushGray3")
+            });
+        }
+
+        var btn = new PclButton { Text = "安装", Height = 28, Width = 76, HorizontalAlignment = HorizontalAlignment.Right };
+        var prLocal = pr;
+        btn.Click += async (_, _) =>
+        {
+            btn.IsEnabled = false;
+            btn.Text = "安装中…";
+            try
+            {
+                await Task.Run(() => ModStore.DownloadAndInstall(prLocal));
+                btn.Text = "已导入";
+                ModStartup.HintPublic("已导入拓展：" + (prLocal.Name ?? "拓展") + "，可在拓展页启用。", false);
+            }
+            catch (Exception ex)
+            {
+                btn.IsEnabled = true;
+                btn.Text = "重试";
+                ModStartup.HintPublic("安装失败：" + ex.Message, true);
+            }
+        };
+
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(btn, 1);
+        grid.Children.Add(left);
+        grid.Children.Add(btn);
+        return grid;
     }
 
     // ================= 公共辅助 =================
