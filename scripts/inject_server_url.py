@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""把官方服务端地址在**编译期**注入 Linux / macOS 客户端的 ModServerUrl.vb。
+"""把官方服务端地址 / 拓展商店密钥在**编译期**注入 Linux / macOS 客户端的 ModServerUrl.vb。
 
-仓库里的常量恒为空（开源/离线版）；真实地址来自：
-    1) 环境变量 TYW_SERVER_URL（GitHub Actions Secrets 或本机 export）
+仓库里的常量恒为空（开源/离线版）；真实值来自：
+    1) 环境变量 TYW_SERVER_URL / TYW_STORE_API_KEY（GitHub Actions Secrets 或本机 export）
     2) TYWLauncher-<平台>/packaging/server_url.txt（本机发版用，不入仓库）
-两个都没有 → 保持空值，产物为纯离线版。
+两个都没有 -> 保持空值，产物为纯离线版。
 
 与 Windows 的 scripts/inject_secrets.py 是同一套思路，但目标文件与常量名不同：
-    Windows : TYW Launcher/Modules/ModSecret.vb        → BuiltInServerAddress
-    Linux   : TYWLauncher-Linux/src/TYW.Core/Base/ModServerUrl.vb → BuiltIn
-    macOS   : TYWLauncher-macOS/src/TYW.Core/Base/ModServerUrl.vb → BuiltIn
+    Windows : TYW Launcher/Modules/ModSecret.vb        -> BuiltInServerAddress / BuiltInStoreApiKey
+    Linux   : TYWLauncher-Linux/src/TYW.Core/Base/ModServerUrl.vb -> BuiltIn / BuiltInStoreApiKey
+    macOS   : TYWLauncher-macOS/src/TYW.Core/Base/ModServerUrl.vb -> BuiltIn / BuiltInStoreApiKey
 
-重要：**地址只写进编译后的二进制，产物里不再附带 server.txt**。
+重要：**地址/密钥只写进编译后的二进制，产物里不再附带 server.txt**。
 所以本脚本必须在 dotnet publish / build-macos.sh 之前执行。
 
 用法：
@@ -47,10 +47,12 @@ TARGETS = {
 }
 
 CONST = "BuiltIn"
+CONST_KEY = "BuiltInStoreApiKey"
 PATTERN = r'(Public Const ' + CONST + r' As String = )"[^"]*"'
+PATTERN_KEY = r'(Public Const ' + CONST_KEY + r' As String = )"[^"]*"'
 
 
-def resolve(cfg):
+def resolve_url(cfg):
     """返回 (地址, 来源)；地址保证以 / 结尾。"""
     value = (os.environ.get("TYW_SERVER_URL", "") or "").strip()
     source = "env:TYW_SERVER_URL"
@@ -65,6 +67,10 @@ def resolve(cfg):
     return value, source
 
 
+def resolve_key():
+    return (os.environ.get("TYW_STORE_API_KEY", "") or "").strip()
+
+
 def mask(value):
     if not value:
         return "（空）"
@@ -72,40 +78,58 @@ def mask(value):
 
 
 def do_apply(cfg):
-    value, source = resolve(cfg)
-    text = io.open(cfg["file"], "rb").read().decode("utf-8-sig")
-    new_text = re.sub(PATTERN, lambda m: m.group(1) + '"' + value.replace('"', '""') + '"',
-                      text, count=1)
-    if new_text == text and re.search(PATTERN, text) is None:
-        raise SystemExit("注入失败：%s 里找不到 Public Const %s" % (cfg["file"], CONST))
-    if new_text != text:
-        io.open(cfg["file"], "wb").write(new_text.encode("utf-8-sig"))
-    if value:
-        print("  %-22s %s  ← %s" % (CONST, mask(value), source), flush=True)
-    else:
-        print("  %-22s 空（离线/开源默认值），产物不含任何服务器地址" % CONST, flush=True)
+    url_val, url_src = resolve_url(cfg)
+    key_val = resolve_key()
+    path = cfg["file"]
+    if not os.path.isfile(path):
+        raise SystemExit("找不到目标文件：" + path)
+    text = io.open(path, "rb").read().decode("utf-8-sig")
+    if re.search(PATTERN, text) is None:
+        raise SystemExit("注入失败：%s 里找不到 Public Const %s" % (path, CONST))
+    text = re.sub(PATTERN, lambda m: m.group(1) + '"' + url_val.replace('"', '""') + '"',
+                  text, count=1)
+    # 确保商店密钥常量存在，再注入
+    if re.search(PATTERN_KEY, text) is None:
+        text = re.sub(r'(Public Const BuiltIn As String = "[^"]*")',
+                      r'\1\n\n    Public Const BuiltInStoreApiKey As String = ""', text, count=1)
+    text = re.sub(PATTERN_KEY, lambda m: m.group(1) + '"' + key_val.replace('"', '""') + '"',
+                  text, count=1)
+    io.open(path, "wb").write(text.encode("utf-8-sig"))
+    print("  %-22s %s  <- %s" % (CONST, mask(url_val), url_src))
+    print("  %-22s %s  <- %s" % (CONST_KEY, mask(key_val),
+          "env:TYW_STORE_API_KEY" if key_val else "(空)"))
     return 0
 
 
 def do_restore(cfg):
-    text = io.open(cfg["file"], "rb").read().decode("utf-8-sig")
-    new_text = re.sub(PATTERN, lambda m: m.group(1) + '""', text, count=1)
-    if new_text != text:
-        io.open(cfg["file"], "wb").write(new_text.encode("utf-8-sig"))
-    print("已还原 %s（仓库里保持空值）" % os.path.relpath(cfg["file"], ROOT).replace("\\", "/"),
+    path = cfg["file"]
+    if not os.path.isfile(path):
+        return 0
+    text = io.open(path, "rb").read().decode("utf-8-sig")
+    new = text
+    new = re.sub(PATTERN, lambda m: m.group(1) + '""', new, count=1)
+    new = re.sub(PATTERN_KEY, lambda m: m.group(1) + '""', new, count=1)
+    if new != text:
+        io.open(path, "wb").write(new.encode("utf-8-sig"))
+    print("已还原 %s（仓库里保持空值）" % os.path.relpath(path, ROOT).replace("\\", "/"),
           flush=True)
     return 0
 
 
 def do_status(cfg):
-    text = io.open(cfg["file"], "rb").read().decode("utf-8-sig")
+    path = cfg["file"]
+    if not os.path.isfile(path):
+        raise SystemExit("找不到目标文件：" + path)
+    text = io.open(path, "rb").read().decode("utf-8-sig")
     m = re.search(r'Public Const ' + CONST + r' As String = "([^"]*)"', text)
+    mk = re.search(r'Public Const ' + CONST_KEY + r' As String = "([^"]*)"', text)
     print("%-22s %s" % (CONST, mask(m.group(1) if m else "")), flush=True)
+    print("%-22s %s" % (CONST_KEY, mask(mk.group(1) if mk else "")), flush=True)
     return 0
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="编译期注入 Linux/macOS 服务端地址（不产出 server.txt）")
+    ap = argparse.ArgumentParser(description="编译期注入 Linux/macOS 服务端地址与商店密钥（不产出 server.txt）")
     ap.add_argument("--platform", "-p", choices=sorted(TARGETS), default="linux")
     ap.add_argument("action", nargs="?", default="apply",
                     choices=["apply", "restore", "status"])
