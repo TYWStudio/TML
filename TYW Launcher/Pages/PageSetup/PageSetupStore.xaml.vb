@@ -2,6 +2,7 @@ Imports System.Collections.Generic
 Imports System.Windows
 Imports System.Windows.Controls
 Imports System.Windows.Media
+Imports System.Windows.Media.Imaging
 
 Public Class PageSetupStore
 
@@ -12,7 +13,6 @@ Public Class PageSetupStore
 
     Private Sub PageSetupStore_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         PanBack.ScrollToHome()
-        LabKey.Text = ModStore.StoreKeyMasked()
         If IsLoaded Then Return
         IsLoaded = True
         AddHandler BtnRefresh.Click, AddressOf BtnRefresh_Click
@@ -42,7 +42,7 @@ Public Class PageSetupStore
                             Else
                                 Dim total = 0
                                 For Each c In cats : total += c.Projects.Count : Next
-                                LabStatus.Text = "共 " & cats.Count & " 个分类、" & total & " 个项目（应用凭证：" & ModStore.StoreKeyMasked() & "）"
+                                LabStatus.Text = "共 " & total & " 个拓展（来自「拓展商店」分类）"
                             End If
                         End Sub)
                 Catch ex As Exception
@@ -129,11 +129,43 @@ Public Class PageSetupStore
         Return card
     End Function
 
+    ''' <summary>项目图标：下载站返回的 URL 直接用 WPF 异步加载；失败时回退到首字占位块。</summary>
+    Private Shared Function BuildIcon(p As ModStore.StoreProject) As UIElement
+        If Not String.IsNullOrWhiteSpace(p.Icon) Then
+            Try
+                Dim img As New Image With {
+                    .Width = 46, .Height = 46, .Margin = New Thickness(0, 0, 14, 0),
+                    .VerticalAlignment = VerticalAlignment.Top,
+                    .Stretch = Stretch.Uniform,
+                    .Source = New BitmapImage(New Uri(p.Icon, UriKind.Absolute))}
+                Return img
+            Catch
+            End Try
+        End If
+        Dim ch = If(String.IsNullOrWhiteSpace(p.Name), "拓", p.Name.Trim().Substring(0, 1))
+        Dim box As New Border With {
+            .Width = 46, .Height = 46, .Margin = New Thickness(0, 0, 14, 0),
+            .VerticalAlignment = VerticalAlignment.Top,
+            .CornerRadius = New CornerRadius(8),
+            .Background = New SolidColorBrush(Color.FromRgb(235, 240, 248))}
+        box.Child = New TextBlock With {
+            .Text = ch, .FontSize = 20, .FontWeight = FontWeights.Bold,
+            .HorizontalAlignment = HorizontalAlignment.Center,
+            .VerticalAlignment = VerticalAlignment.Center,
+            .Foreground = New SolidColorBrush(Color.FromRgb(90, 120, 170))}
+        Return box
+    End Function
+
     Private Function BuildProjectCard(p As ModStore.StoreProject) As UIElement
         Dim card As New MyCard() With {.Margin = New Thickness(0, 0, 0, 12)}
         Dim root As New Grid() With {.Margin = New Thickness(21, 15, 21, 16)}
+        root.ColumnDefinitions.Add(New ColumnDefinition() With {.Width = GridLength.Auto})
         root.ColumnDefinitions.Add(New ColumnDefinition() With {.Width = New GridLength(1, GridUnitType.Star)})
         root.ColumnDefinitions.Add(New ColumnDefinition() With {.Width = GridLength.Auto})
+        Dim imgIcon As UIElement = BuildIcon(p)
+        Grid.SetColumn(imgIcon, 0)
+        Grid.SetRowSpan(imgIcon, 4)
+        root.Children.Add(imgIcon)
         For i As Integer = 0 To 3
             root.RowDefinitions.Add(New RowDefinition() With {.Height = GridLength.Auto})
         Next
@@ -150,6 +182,7 @@ Public Class PageSetupStore
                 .VerticalAlignment = VerticalAlignment.Center,
                 .Foreground = Res("ColorBrushGray3", Color.FromRgb(140, 140, 140))})
         End If
+        Grid.SetColumn(head, 1)
         root.Children.Add(head)
 
         ' ── 描述 ──
@@ -158,6 +191,7 @@ Public Class PageSetupStore
                 .Text = p.Description, .TextWrapping = TextWrapping.Wrap, .LineHeight = 19,
                 .Margin = New Thickness(0, 8, 0, 0)}
             Grid.SetRow(labDesc, 1)
+            Grid.SetColumn(labDesc, 1)
             root.Children.Add(labDesc)
         End If
 
@@ -173,6 +207,7 @@ Public Class PageSetupStore
             .TextTrimming = TextTrimming.CharacterEllipsis,
             .Foreground = Res("ColorBrushGray4", Color.FromRgb(166, 166, 166))}
         Grid.SetRow(labMeta, 2)
+        Grid.SetColumn(labMeta, 1)
         root.Children.Add(labMeta)
 
         ' ── 按钮列 ──
@@ -185,7 +220,7 @@ Public Class PageSetupStore
             .ColorType = MyButton.ColorState.Highlight}
         AddHandler btnImport.Click, Sub(s, ev) ImportProject(curId)
         btns.Children.Add(btnImport)
-        Grid.SetColumn(btns, 1)
+        Grid.SetColumn(btns, 2)
         Grid.SetRowSpan(btns, 4)
         root.Children.Add(btns)
 

@@ -21,12 +21,6 @@
                     <StackPanel Grid.Row="2" Orientation="Horizontal">
                         <local:MyButton x:Name="BtnRefresh" Text="刷新" Width="110" Padding="13,0" Margin="0,0,15,0" ColorType="Highlight" />
                         <local:MySearchBox x:Name="SearchBox" Width="240" HintText="搜索拓展…" Margin="0,0,15,0" />
-                        <TextBlock VerticalAlignment="Center" FontSize="12"
-                                   Foreground="{DynamicResource ColorBrushGray4}"
-                                   Text="应用凭证：" />
-                        <TextBlock x:Name="LabKey" VerticalAlignment="Center" FontSize="12" FontWeight="Bold"
-                                   Foreground="{DynamicResource ColorBrushGray3}"
-                                   Text="……" />
                     </StackPanel>
                     <TextBlock Grid.Row="4" x:Name="LabStatus" Margin="0,0,0,0" FontSize="12.5"
                                Foreground="{DynamicResource ColorBrushGray3}" Text="正在加载拓展列表……" />

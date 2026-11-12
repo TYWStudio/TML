@@ -12,36 +12,30 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * 拓展商店：从下载站（downloads.tywmc.cn）拉取「分支项目树」并在设置里展示，
- * 支持一键把拓展包下载并导入启动器（复用 ExtManager）。
+ * 拓展商店：只读取下载站「拓展商店」一级分类下的项目，支持搜索、图标与一键导入。
  *
- * 与 Windows / Linux / macOS 版同一套思路：
- *   应用凭证密钥（X-Api-Key）恒不进源码，由构建期注入 BuildConfig.STORE_API_KEY；
- *   运行时只在内存里使用，界面只显示掩码，绝不打印明文。
- *   该密钥用于让启动器成为「可信内部调用方」，绕过下载站的来源域名 / IP 白名单，
- *   在任意客户端上都能读取与下载；密钥无法反推、源码里永远看不到真实值。
+ * 密钥恒不进源码，由构建期注入 BuildConfig.STORE_API_KEY；运行时只在内存里使用，
+ * 界面不显示（连掩码都不显示），绝不打印明文。
  */
 object Store {
     private const val BASE_URL = "https://downloads.tywmc.cn/"
     private const val APP_SLUG = "tyw-launcher"
 
+    /** 只读取这个一级分类；分类改名时仍按 slug / kind 识别。 */
+    private const val CATEGORY_SLUG = "extensions"
+    private const val CATEGORY_NAME = "拓展商店"
+    private const val PAGE_SIZE = 100
+    private const val MAX_PAGES = 20
+
     private val apiKey: String get() = BuildConfig.STORE_API_KEY.trim()
 
-    /** 当前运行平台（与下载站 os 字段一致：android）。 */
+    /** 当前平台（与下载站 os 字段一致）。 */
     private val storeOs: String get() = "android"
 
-    /** 当前 CPU 架构（与下载站 arch 字段一致：取设备主 ABI）。 */
-    private val storeArch: String get() = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+    /** 当前 CPU 架构，归一到下载站的 arch 取值（x64 / arm64 / x86 / arm）。 */
+    private val storeArch: String get() = normArch(Build.SUPPORTED_ABIS.firstOrNull() ?: "")
 
-    /** 密钥掩码：用于界面展示，避免泄露明文。 */
-    fun keyMasked(): String {
-        val k = apiKey
-        if (k.isEmpty()) return "（未配置）"
-        if (k.length <= 6) return "****"
-        return k.take(4) + "****" + k.takeLast(2)
-    }
-
-    /** 分支项目（下载站 depth=2 节点）。 */
+    /** 分支项目（下载站 depth=2 节点）。icon 已经是完整 URL。 */
     data class StoreProject(
         val id: Int = 0,
         val name: String = "",
@@ -65,39 +59,60 @@ object Store {
         val projects: MutableList<StoreProject> = mutableListOf()
     )
 
-    /** 拉取分类树：返回所有可见的 depth=1 分类，以及各自 depth=2 的项目。 */
+    /** 只拉取「拓展商店」分类及其项目；分页读取，项目数量不限。 */
     @Throws(Exception::class)
     suspend fun fetchTree(): List<StoreCategory> = withContext(Dispatchers.IO) {
-        val url = BASE_URL + "api/nodes.php?app=" + URLEncoder.encode(APP_SLUG, "UTF-8") +
-            "&depth=2&with=stats"
-        val raw = get(url) ?: throw IllegalStateException("下载站无响应")
-        val root = JSONObject(raw)
-        val nodes = root.optJSONArray("nodes") ?: JSONArray()
-        val all = mutableListOf<JSONObject>()
-        val depth1 = mutableListOf<JSONObject>()
-        for (i in 0 until nodes.length()) {
-            val n = nodes.optJSONObject(i) ?: continue
-            all.add(n)
-            if (n.optInt("depth", 0) == 1) depth1.add(n)
+        val all = JSONArray()
+        var page = 1
+        while (page <= MAX_PAGES) {
+            val url = BASE_URL + "api/nodes.php?app=" + URLEncoder.encode(APP_SLUG, "UTF-8") +
+                "&depth=2&with=stats&limit=" + PAGE_SIZE + "&page=" + page
+            val raw = get(url) ?: throw IllegalStateException("下载站无响应")
+            val root = JSONObject(raw)
+            val nodes = root.optJSONArray("nodes") ?: JSONArray()
+            for (i in 0 until nodes.length()) {
+                val n = nodes.optJSONObject(i) ?: continue
+                all.put(n)
+            }
+            val pages = root.optInt("pages", 1)
+            if (page >= pages || nodes.length() == 0) break
+            page++
         }
+        val list = mutableListOf<JSONObject>()
+        for (i in 0 until all.length()) (all.optJSONObject(i) ?: continue).also { list.add(it) }
+
         val cats = mutableListOf<StoreCategory>()
-        for (c in depth1) {
+        for (c in list) {
+            if (c.optInt("depth", 0) != 1) continue
+            val slug = c.optString("slug", "")
+            val name = c.optString("name", "")
+            val kind = c.optString("kind", "")
+            if (!isStoreCategory(slug, name, kind)) continue
             val cat = StoreCategory(
                 id = c.optInt("id", 0),
-                name = c.optString("name", ""),
+                name = name,
                 tagline = c.optString("tagline", ""),
                 description = c.optString("description", ""),
-                icon = c.optString("icon", "")
+                icon = iconUrl(c.optString("icon", ""))
             )
-            val pid = cat.id
-            for (n in all) {
-                if (n.optInt("depth", 0) == 2 && n.optInt("parent_id", 0) == pid) {
+            for (n in list) {
+                if (n.optInt("depth", 0) == 2 && n.optInt("parent_id", 0) == cat.id) {
                     cat.projects.add(projectFrom(n))
                 }
             }
             cats.add(cat)
         }
         cats
+    }
+
+    private fun isStoreCategory(slug: String, name: String, kind: String): Boolean =
+        slug.equals(CATEGORY_SLUG, true) || name == CATEGORY_NAME || kind.equals(CATEGORY_SLUG, true)
+
+    /** 下载站返回的 icon 是站内路径，这里补成完整 URL。 */
+    private fun iconUrl(icon: String): String {
+        if (icon.isBlank()) return ""
+        if (icon.startsWith("http", true)) return icon
+        return BASE_URL.trimEnd('/') + "/" + icon.trimStart('/')
     }
 
     private fun projectFrom(j: JSONObject): StoreProject {
@@ -108,7 +123,7 @@ object Store {
             slug = j.optString("slug", ""),
             tagline = j.optString("tagline", ""),
             description = j.optString("description", ""),
-            icon = j.optString("icon", ""),
+            icon = iconUrl(j.optString("icon", "")),
             downloads = stats?.optInt("downloads", 0) ?: 0,
             files = stats?.optInt("files", 0) ?: 0,
             sizeHuman = stats?.optString("size_human", "") ?: "",
@@ -116,7 +131,7 @@ object Store {
         )
     }
 
-    /** 拉取某项目的下载文件清单（带 get_url，可直接拼成下载链接）。 */
+    /** 拉取某项目的下载文件清单（带 get_url）。 */
     @Throws(Exception::class)
     suspend fun fetchFiles(nodeId: Int): List<JSONObject> = withContext(Dispatchers.IO) {
         val url = BASE_URL + "api/files.php?node=" + nodeId +
@@ -129,18 +144,31 @@ object Store {
         list
     }
 
-    /** 按当前平台挑一个最匹配的下载文件；只认拓展包（.tmlext / .jar）。 */
+    /**
+     * 自动分辨通用包与平台专用包，只认拓展包（.tmlext / .jar）：
+     *   os/arch 为空或 any/all/universal = 通用包，所有平台都能装；
+     *   明确标了其他平台/架构（含文件名带 -windows / -linux / arm64 等）的直接跳过；
+     *   多个候选时优先精确匹配当前平台 + 架构的那个。
+     */
     fun pickFile(files: List<JSONObject>): JSONObject? {
         var best: JSONObject? = null
         var bestScore = -1
         for (f in files) {
             val fname = f.optString("file", "").lowercase()
             if (!fname.endsWith(".tmlext") && !fname.endsWith(".jar")) continue
-            val os = f.optString("os", "")
-            val arch = f.optString("arch", "")
+            val os = normOs(f.optString("os", ""))
+            val arch = normArch(f.optString("arch", ""))
+            val hintOs = normOs(osFromFile(fname))
+            val hintArch = normArch(archFromFile(fname))
+
+            if (!isAny(os) && os != storeOs) continue
+            if (!isAny(arch) && storeArch.isNotEmpty() && arch != storeArch) continue
+            if (isAny(os) && hintOs.isNotEmpty() && hintOs != storeOs) continue
+            if (isAny(arch) && hintArch.isNotEmpty() && storeArch.isNotEmpty() && hintArch != storeArch) continue
+
             var score = 0
-            if (os == storeOs) score += 2
-            if (arch == storeArch) score += 1
+            if (os == storeOs || (isAny(os) && hintOs == storeOs)) score += 2
+            if (arch == storeArch || (isAny(arch) && hintArch == storeArch)) score += 1
             if (score > bestScore) {
                 bestScore = score
                 best = f
@@ -149,17 +177,51 @@ object Store {
         return best
     }
 
-    /**
-     * 一键导入：挑当前平台的最新构建 → 下载到缓存 → 交给 ExtManager 安装（仅放入扩展目录，
-     * 等用户在扩展页确认权限清单后启用）。
-     */
+    private fun isAny(v: String): Boolean =
+        v.isEmpty() || v == "any" || v == "all" || v == "universal" ||
+            v == "common" || v == "通用" || v == "none" || v == "-"
+
+    private fun normOs(v: String): String = when (v.trim().lowercase()) {
+        "win", "win32", "win64", "windows" -> "windows"
+        "mac", "macos", "macosx", "osx", "darwin" -> "macos"
+        "linux" -> "linux"
+        "android" -> "android"
+        "ios", "iphone", "ipad" -> "ios"
+        else -> v.trim().lowercase()
+    }
+
+    private fun normArch(v: String): String = when (v.trim().lowercase()) {
+        "x86_64", "amd64", "x64", "64bit", "64" -> "x64"
+        "aarch64", "arm64", "arm64-v8a", "armv8" -> "arm64"
+        "x86", "i386", "i686", "32bit", "32" -> "x86"
+        "armeabi-v7a", "armeabi", "armv7", "arm" -> "arm"
+        else -> v.trim().lowercase()
+    }
+
+    private fun osFromFile(name: String): String = when {
+        name.contains("android") -> "android"
+        name.contains("windows") || name.contains("win32") || name.contains("-win") -> "windows"
+        name.contains("macos") || name.contains("darwin") || name.contains("-mac") -> "macos"
+        name.contains("linux") -> "linux"
+        else -> ""
+    }
+
+    private fun archFromFile(name: String): String = when {
+        name.contains("aarch64") || name.contains("arm64") -> "arm64"
+        name.contains("x86_64") || name.contains("amd64") || name.contains("-x64") -> "x64"
+        name.contains("armeabi") || name.contains("armv7") -> "arm"
+        name.contains("-x86") || name.contains("i686") -> "x86"
+        else -> ""
+    }
+
+    /** 一键导入：挑当前平台适配的包 → 下载到缓存 → 交给 ExtManager 安装。 */
     @Throws(Exception::class)
     suspend fun downloadAndInstall(project: StoreProject, cacheDir: java.io.File) =
         withContext(Dispatchers.IO) {
             if (project.id == 0) throw IllegalStateException("项目无效")
             val files = fetchFiles(project.id)
             val pick = pickFile(files)
-                ?: throw IllegalStateException("没有适配当前平台（android）的下载，请在下载站查看其它平台版本。")
+                ?: throw IllegalStateException("没有适配当前平台的拓展包，请在下载站查看其它平台版本。")
             val getUrl = pick.optString("get_url", "")
             if (getUrl.isEmpty()) throw IllegalStateException("下载链接缺失。")
             val fullUrl = if (getUrl.startsWith("http", true)) getUrl

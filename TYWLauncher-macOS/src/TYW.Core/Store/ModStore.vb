@@ -11,7 +11,7 @@ Imports TYW.Core.Ext
 '''
 ''' 安全约定（与 OAuth / CurseForge 密钥一致）：
 '''   应用凭证密钥（X-Api-Key）恒不进源码，由 scripts/inject_server_url.py 在编译期注入
-'''   ModServerUrl.BuiltInStoreApiKey；运行时只在内存里使用，界面只显示掩码，绝不打印明文。
+'''   ModServerUrl.BuiltInStoreApiKey；运行时只在内存里使用，界面不显示，绝不打印明文。
 '''   该密钥用于让启动器成为「可信内部调用方」，从而绕过下载站的来源域名 / IP 白名单，
 '''   在任意客户端上都能读取与下载；密钥无法反推、源码里永远看不到真实值。
 ''' </summary>
@@ -24,6 +24,21 @@ Public Module ModStore
 
     ''' <summary>下载站中的应用标识（分支项目树的根）。</summary>
     Public Const StoreAppSlug As String = "tyw-launcher"
+
+    ''' <summary>只读取这个一级分类下的拓展项目（分类改名时仍按 slug / kind 识别）。</summary>
+    Public Const StoreCategorySlug As String = "extensions"
+    Public Const StoreCategoryName As String = "拓展商店"
+
+    Private Function IsStoreCategory(slug As String, name As String, kind As String) As Boolean
+        Return slug.Equals(StoreCategorySlug, StringComparison.OrdinalIgnoreCase) OrElse name.Equals(StoreCategoryName, StringComparison.OrdinalIgnoreCase) OrElse kind.Equals(StoreCategorySlug, StringComparison.OrdinalIgnoreCase)
+    End Function
+
+    ''' <summary>下载站返回的 icon 是站内路径，补成完整 URL。</summary>
+    Public Function IconUrl(icon As String) As String
+        If String.IsNullOrWhiteSpace(icon) Then Return ""
+        If icon.StartsWith("http://", StringComparison.OrdinalIgnoreCase) OrElse icon.StartsWith("https://", StringComparison.OrdinalIgnoreCase) Then Return icon
+        Return StoreBaseUrl.TrimEnd("/"c) & "/" & icon.TrimStart("/"c)
+    End Function
 
 #End Region
 
@@ -48,12 +63,14 @@ Public Module ModStore
 
 #Region "密钥与请求头"
 
-    ''' <summary>密钥掩码：用于界面展示，避免泄露明文。</summary>
-    Public Function StoreKeyMasked() As String
-        Dim key = ModServerUrl.BuiltInStoreApiKey
-        If String.IsNullOrWhiteSpace(key) Then Return "（未配置）"
-        If key.Length <= 6 Then Return "****"
-        Return key.Substring(0, 4) & "****" & key.Substring(key.Length - 2)
+    ''' <summary>下载项目图标字节（失败返回空数组，不影响列表展示）。</summary>
+    Public Function FetchIconBytes(url As String) As Byte()
+        Try
+            If String.IsNullOrWhiteSpace(url) Then Return Array.Empty(Of Byte)()
+            Return Client().GetByteArrayAsync(url).GetAwaiter().GetResult()
+        Catch
+            Return Array.Empty(Of Byte)()
+        End Try
     End Function
 
     Private Function ApiHeaders() As Dictionary(Of String, String)
@@ -88,7 +105,7 @@ Public Module ModStore
             p.Slug = JsonStr(j, "slug")
             p.Tagline = JsonStr(j, "tagline")
             p.Description = JsonStr(j, "description")
-            p.Icon = JsonStr(j, "icon")
+            p.Icon = IconUrl(JsonStr(j, "icon"))
             Dim stats As JsonElement
             If j.TryGetProperty("stats", stats) Then
                 p.Downloads = JsonInt(stats, "downloads")
@@ -161,38 +178,52 @@ Public Module ModStore
         End Using
     End Function
 
-    ''' <summary>拉取分类树：返回所有可见的 depth=1 分类，以及各自 depth=2 的项目。</summary>
+    ''' <summary>只拉取「拓展商店」分类及其项目；分页读取，分类/项目数量不限。</summary>
     Public Function FetchTree() As List(Of StoreCategory)
         Dim cats As New List(Of StoreCategory)()
         Try
-            Dim url = StoreBaseUrl.TrimEnd("/"c) & "/api/nodes.php?app=" & Uri.EscapeDataString(StoreAppSlug) & "&depth=2&with=stats"
-            Dim raw = GetStore(url)
-            Using doc = JsonDocument.Parse(raw)
-                Dim root = doc.RootElement
-                Dim nodesEl As JsonElement
-                If Not root.TryGetProperty("nodes", nodesEl) Then Return cats
-                Dim all As New List(Of JsonElement)()
-                Dim depth1 As New List(Of JsonElement)()
-                For Each n In nodesEl.EnumerateArray()
-                    all.Add(n)
-                    If JsonInt(n, "depth") = 1 Then depth1.Add(n)
+            ' JsonElement 绑定在 JsonDocument 上，跨页收集时必须 Clone 才能脱离文档生命周期
+            Dim all As New List(Of JsonElement)()
+            Dim page As Integer = 1
+            Do While page <= 20
+                Dim url = StoreBaseUrl.TrimEnd("/"c) & "/api/nodes.php?app=" & Uri.EscapeDataString(StoreAppSlug) &
+                          "&depth=2&with=stats&limit=100&page=" & page
+                Dim raw = GetStore(url)
+                Dim count As Integer = 0
+                Dim pages As Integer = 1
+                Using doc = JsonDocument.Parse(raw)
+                    Dim root = doc.RootElement
+                    Dim nodesEl As JsonElement
+                    If root.TryGetProperty("nodes", nodesEl) Then
+                        For Each x In nodesEl.EnumerateArray()
+                            all.Add(x.Clone())
+                            count += 1
+                        Next
+                    End If
+                    pages = JsonInt(root, "pages")
+                    If pages <= 0 Then pages = 1
+                End Using
+                If count = 0 OrElse page >= pages Then Exit Do
+                page += 1
+            Loop
+
+            For Each c In all
+                If JsonInt(c, "depth") <> 1 Then Continue For
+                If Not IsStoreCategory(JsonStr(c, "slug"), JsonStr(c, "name"), JsonStr(c, "kind")) Then Continue For
+                Dim cat As New StoreCategory With {
+                    .Id = JsonInt(c, "id"),
+                    .Name = JsonStr(c, "name"),
+                    .Tagline = JsonStr(c, "tagline"),
+                    .Description = JsonStr(c, "description"),
+                    .Icon = IconUrl(JsonStr(c, "icon"))}
+                Dim pid = cat.Id
+                For Each x In all
+                    If JsonInt(x, "depth") = 2 AndAlso JsonInt(x, "parent_id") = pid Then
+                        cat.Projects.Add(StoreProject.FromJson(x))
+                    End If
                 Next
-                For Each c In depth1
-                    Dim cat As New StoreCategory With {
-                        .Id = JsonInt(c, "id"),
-                        .Name = JsonStr(c, "name"),
-                        .Tagline = JsonStr(c, "tagline"),
-                        .Description = JsonStr(c, "description"),
-                        .Icon = JsonStr(c, "icon")}
-                    Dim pid = cat.Id
-                    For Each n In all
-                        If JsonInt(n, "depth") = 2 AndAlso JsonInt(n, "parent_id") = pid Then
-                            cat.Projects.Add(StoreProject.FromJson(n))
-                        End If
-                    Next
-                    cats.Add(cat)
-                Next
-            End Using
+                cats.Add(cat)
+            Next
         Catch ex As Exception
             ModLog.Err(ex, "拉取拓展商店分类树失败")
             Throw
@@ -211,31 +242,91 @@ Public Module ModStore
             Dim filesEl As JsonElement
             If root.TryGetProperty("files", filesEl) Then
                 For Each f In filesEl.EnumerateArray()
-                    list.Add(f)
+                    list.Add(f.Clone())
                 Next
             End If
         End Using
         Return list
     End Function
 
-    ''' <summary>按当前平台挑一个最匹配的下载文件；只认拓展包（.tmlext / .jar）。</summary>
+    ''' <summary>
+    ''' 自动分辨通用包与平台专用包，只认拓展包（.tmlext / .jar）：
+    ''' os / arch 为空或 any/all/universal 视为通用包；明确标了别的平台（含文件名里的
+    ''' -windows / -linux / arm64 等）直接跳过；多个候选时优先精确匹配当前平台 + 架构。
+    ''' </summary>
     Public Function PickFile(files As List(Of JsonElement)) As JsonElement
         Dim best As JsonElement = Nothing
         Dim bestScore As Integer = -1
+        Dim curOs = NormOs(StoreOs)
+        Dim curArch = NormArch(StoreArch)
         For Each f In files
             Dim fname = If(JsonStr(f, "file"), "").ToLowerInvariant()
             If Not fname.EndsWith(".tmlext") AndAlso Not fname.EndsWith(".jar") Then Continue For
-            Dim os = JsonStr(f, "os")
-            Dim arch = JsonStr(f, "arch")
+            Dim os = NormOs(JsonStr(f, "os"))
+            Dim arch = NormArch(JsonStr(f, "arch"))
+            Dim hintOs = NormOs(OsFromFile(fname))
+            Dim hintArch = NormArch(ArchFromFile(fname))
+            If Not IsAny(os) AndAlso os <> curOs Then Continue For
+            If Not IsAny(arch) AndAlso curArch <> "" AndAlso arch <> curArch Then Continue For
+            If IsAny(os) AndAlso hintOs <> "" AndAlso hintOs <> curOs Then Continue For
+            If IsAny(arch) AndAlso hintArch <> "" AndAlso curArch <> "" AndAlso hintArch <> curArch Then Continue For
             Dim score As Integer = 0
-            If os = StoreOs Then score += 2
-            If arch = StoreArch Then score += 1
+            If os = curOs OrElse (IsAny(os) AndAlso hintOs = curOs) Then score += 2
+            If arch = curArch OrElse (IsAny(arch) AndAlso hintArch = curArch) Then score += 1
             If score > bestScore Then
                 bestScore = score
                 best = f
             End If
         Next
         Return best
+    End Function
+
+    Private Function IsAny(v As String) As Boolean
+        Select Case v
+            Case "", "any", "all", "universal", "common", "通用", "none", "-"
+                Return True
+            Case Else
+                Return False
+        End Select
+    End Function
+
+    Private Function NormOs(v As String) As String
+        Dim s = If(v, "").Trim().ToLowerInvariant()
+        Select Case s
+            Case "win", "win32", "win64", "windows" : Return "windows"
+            Case "mac", "macos", "macosx", "osx", "darwin" : Return "macos"
+            Case "linux" : Return "linux"
+            Case "android" : Return "android"
+            Case "ios", "iphone", "ipad" : Return "ios"
+            Case Else : Return s
+        End Select
+    End Function
+
+    Private Function NormArch(v As String) As String
+        Dim s = If(v, "").Trim().ToLowerInvariant()
+        Select Case s
+            Case "x86_64", "amd64", "x64", "64bit", "64" : Return "x64"
+            Case "aarch64", "arm64", "arm64-v8a", "armv8" : Return "arm64"
+            Case "x86", "i386", "i686", "32bit", "32" : Return "x86"
+            Case "armeabi-v7a", "armeabi", "armv7", "arm" : Return "arm"
+            Case Else : Return s
+        End Select
+    End Function
+
+    Private Function OsFromFile(name As String) As String
+        If name.Contains("android") Then Return "android"
+        If name.Contains("windows") OrElse name.Contains("win32") OrElse name.Contains("-win") Then Return "windows"
+        If name.Contains("macos") OrElse name.Contains("darwin") OrElse name.Contains("-mac") Then Return "macos"
+        If name.Contains("linux") Then Return "linux"
+        Return ""
+    End Function
+
+    Private Function ArchFromFile(name As String) As String
+        If name.Contains("aarch64") OrElse name.Contains("arm64") Then Return "arm64"
+        If name.Contains("x86_64") OrElse name.Contains("amd64") OrElse name.Contains("-x64") Then Return "x64"
+        If name.Contains("armeabi") OrElse name.Contains("armv7") Then Return "arm"
+        If name.Contains("-x86") OrElse name.Contains("i686") Then Return "x86"
+        Return ""
     End Function
 
 #End Region

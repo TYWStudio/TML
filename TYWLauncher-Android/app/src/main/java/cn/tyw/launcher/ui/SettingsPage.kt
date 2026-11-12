@@ -1,6 +1,8 @@
 package cn.tyw.launcher.ui
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import cn.tyw.launcher.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLEncoder
@@ -47,6 +58,7 @@ fun SettingsPage(
 
     var storeCats by remember { mutableStateOf<List<Store.StoreCategory>?>(null) }
     var storeLoading by remember { mutableStateOf(false) }
+    var storeQuery by remember { mutableStateOf("") }
     var downloading by remember { mutableStateOf("") }
     var dlProgress by remember { mutableFloatStateOf(0f) }
 
@@ -234,37 +246,52 @@ fun SettingsPage(
 
         // ===== 拓展商店 =====
         TywCard("拓展商店") {
-            SettingRow("应用凭证") { ValueText(Store.keyMasked()) }
-            HintText("从官方下载站浏览并一键导入拓展。未配置应用凭证时列表为空（开源版默认不连下载站）。")
+            OutlinedTextField(
+                value = storeQuery,
+                onValueChange = { storeQuery = it },
+                label = { Text("搜索拓展", fontSize = 11.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             if (storeLoading) {
                 LinearProgressIndicator(progress = { 1f }, modifier = Modifier.fillMaxWidth())
                 Text("正在从下载站加载……", fontSize = 11.sp, color = p.textHint)
             } else if (storeCats != null) {
-                val cats = storeCats!!
-                if (cats.isEmpty()) {
-                    Text("暂无内容（可能未配置应用凭证，或下载站没有上架拓展）。", fontSize = 11.sp, color = p.textHint)
+                val q = storeQuery.trim()
+                val projects = (storeCats ?: emptyList()).flatMap { it.projects }.filter { pr ->
+                    q.isEmpty() ||
+                        pr.name.contains(q, true) || pr.tagline.contains(q, true) ||
+                        pr.description.contains(q, true) || pr.slug.contains(q, true)
+                }
+                if (projects.isEmpty()) {
+                    Text("没有匹配的拓展。", fontSize = 11.sp, color = p.textHint)
                 } else {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
-                        for (cat in cats) {
-                            if (cat.name.isBlank()) continue
-                            Text(cat.name, fontSize = 14.sp, color = p.c1)
-                            if (cat.tagline.isNotBlank())
-                                Text(cat.tagline, fontSize = 11.5.sp, color = p.textHint)
-                            for (pr in cat.projects) {
-                                Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(pr.name, fontSize = 13.sp, color = p.c1)
-                                        if (pr.tagline.isNotBlank())
-                                            Text(pr.tagline, fontSize = 11.sp, color = p.textHint)
-                                    }
-                                    TywButton("安装", highlight = true) {
-                                        scope.launch {
-                                            try {
-                                                Store.downloadAndInstall(pr, context.cacheDir)
-                                                Toast.makeText(context, "已导入拓展：${pr.name}，可在拓展页启用。", Toast.LENGTH_SHORT).show()
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "安装失败：${e.message}", Toast.LENGTH_LONG).show()
-                                            }
+                    Column {
+                        for (pr in projects) {
+                            Row(
+                                Modifier.padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                StoreIcon(pr.icon, pr.name)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(pr.name, fontSize = 13.sp, color = p.c1)
+                                    if (pr.tagline.isNotBlank())
+                                        Text(pr.tagline, fontSize = 11.sp, color = p.textHint)
+                                    val meta = listOfNotNull(
+                                        if (pr.downloads > 0) pr.downloads.toString() + " 次下载" else null,
+                                        pr.sizeHuman.takeIf { it.isNotBlank() && it != "—" }
+                                    )
+                                    if (meta.isNotEmpty())
+                                        Text(meta.joinToString(" · "), fontSize = 10.sp, color = p.textHint)
+                                }
+                                TywButton("安装", highlight = true) {
+                                    scope.launch {
+                                        try {
+                                            Store.downloadAndInstall(pr, context.cacheDir)
+                                            Toast.makeText(context, "已导入拓展：${pr.name}，可在拓展页启用。", Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "安装失败：${e.message}", Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 }
@@ -376,4 +403,47 @@ private fun NumberField(value: Int, label: String, onChange: (Int) -> Unit) {
         singleLine = true,
         modifier = Modifier.width(88.dp)
     )
+}
+
+/** 项目图标：异步从下载站加载，失败时回退到首字占位块（不阻塞列表渲染）。 */
+@Composable
+private fun StoreIcon(url: String, name: String) {
+    val p = LocalPalette.current
+    var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url) {
+        if (url.isBlank()) return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "TYWLauncher-Android")
+                }
+                val b = if (conn.responseCode in 200..299) {
+                    conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                } else null
+                conn.disconnect()
+                b
+            } catch (e: Exception) {
+                null
+            }
+        }
+        bitmap = loaded
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = name,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(42.dp)
+        )
+    } else {
+        Box(
+            Modifier.size(42.dp).background(p.bg0, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(name.trim().take(1).ifEmpty { "拓" }, fontSize = 18.sp, color = p.c1)
+        }
+    }
 }

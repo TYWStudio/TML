@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using TYW.Desktop.Controls;
 using TYW;
 using System;
@@ -749,21 +750,20 @@ public static class SettingsPage
 
     // ================= 拓展商店 =================
 
-    /// <summary>拓展商店：从官方下载站拉取分类/项目并一键导入拓展（.tmlext/.jar）。</summary>
+    /// <summary>拓展商店：只读「拓展商店」分类，带搜索框、项目图标，一键导入拓展。</summary>
     private static Control StoreCard()
     {
         var (card, stack) = NewCard("拓展商店");
-        stack.Children.Add(Row("应用凭证", Value(ModStore.StoreKeyMasked())));
-        stack.Children.Add(new TextBlock
-        {
-            Text = "从官方下载站浏览并一键导入拓展。未配置应用凭证时列表为空（开源版默认不连下载站）。",
-            FontSize = 11.5,
-            FontFamily = Pcl.FontFamily,
-            Foreground = Pcl.Res("ColorBrushGray3"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 4)
-        });
 
+        var search = new TextBox
+        {
+            Watermark = "搜索拓展…",
+            FontSize = 12.5,
+            FontFamily = Pcl.FontFamily,
+            Height = 30,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 4)
+        };
         var listPanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 4, 0, 0) };
         var status = new TextBlock
         {
@@ -772,8 +772,35 @@ public static class SettingsPage
             Foreground = Pcl.Res("ColorBrushGray2"),
             Text = "点击「刷新列表」从下载站加载拓展。"
         };
-
         var btnRefresh = new PclButton { Text = "刷新列表", Height = 30, Width = 110 };
+
+        var projects = new List<ModStore.StoreProject>();
+        var icons = new Dictionary<int, IImage>();
+
+        void Render()
+        {
+            listPanel.Children.Clear();
+            var q = (search.Text ?? "").Trim();
+            var shown = projects.Where(p => q.Length == 0 ||
+                (p.Name ?? "").IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (p.Tagline ?? "").IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (p.Description ?? "").IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (p.Slug ?? "").IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            if (shown.Count == 0)
+            {
+                status.Text = projects.Count == 0 ? "下载站还没有上架拓展。" : "没有匹配的拓展。";
+                return;
+            }
+            status.Text = "";
+            foreach (var pr in shown)
+            {
+                icons.TryGetValue(pr.Id, out var icon);
+                listPanel.Children.Add(ProjectRow(pr, icon));
+            }
+        }
+
+        search.TextChanged += (_, _) => Render();
+
         btnRefresh.Click += async (_, _) =>
         {
             listPanel.Children.Clear();
@@ -782,37 +809,28 @@ public static class SettingsPage
             try
             {
                 var cats = await Task.Run(() => ModStore.FetchTree());
-                listPanel.Children.Clear();
-                if (cats == null || cats.Count == 0)
+                projects.Clear();
+                foreach (var cat in cats) projects.AddRange(cat.Projects);
+
+                // 图标字节在后台取，回到 UI 线程再解码成 Bitmap
+                var jobs = projects.Where(p => !string.IsNullOrWhiteSpace(p.Icon))
+                                   .GroupBy(p => p.Id)
+                                   .Select(g => (Id: g.Key, Url: g.First().Icon))
+                                   .Select(async j => (j.Id, Data: await Task.Run(() => ModStore.FetchIconBytes(j.Url))))
+                                   .ToArray();
+                var loaded = await Task.WhenAll(jobs);
+                icons.Clear();
+                foreach (var item in loaded)
                 {
-                    status.Text = "暂无内容（可能未配置应用凭证，或下载站没有上架拓展）。";
-                    return;
-                }
-                foreach (var cat in cats)
-                {
-                    if (string.IsNullOrWhiteSpace(cat.Name)) continue;
-                    listPanel.Children.Add(new TextBlock
+                    if (item.Data == null || item.Data.Length == 0) continue;
+                    try
                     {
-                        Text = cat.Name,
-                        FontSize = 14,
-                        FontWeight = FontWeight.Bold,
-                        FontFamily = Pcl.FontFamily,
-                        Foreground = Pcl.Res("ColorBrush1"),
-                        Margin = new Thickness(0, 6, 0, 2)
-                    });
-                    if (!string.IsNullOrWhiteSpace(cat.Tagline))
-                        listPanel.Children.Add(new TextBlock
-                        {
-                            Text = cat.Tagline,
-                            FontSize = 11.5,
-                            FontFamily = Pcl.FontFamily,
-                            Foreground = Pcl.Res("ColorBrushGray3"),
-                            TextWrapping = TextWrapping.Wrap
-                        });
-                    foreach (var pr in cat.Projects)
-                        listPanel.Children.Add(ProjectRow(pr));
+                        using var ms = new MemoryStream(item.Data);
+                        icons[item.Id] = new Bitmap(ms);
+                    }
+                    catch { }
                 }
-                status.Text = "";
+                Render();
             }
             catch (Exception ex)
             {
@@ -824,17 +842,52 @@ public static class SettingsPage
             }
         };
 
+        stack.Children.Add(search);
         stack.Children.Add(btnRefresh);
         stack.Children.Add(listPanel);
         stack.Children.Add(status);
         return card;
     }
 
-    private static Control ProjectRow(ModStore.StoreProject pr)
+    private static Control ProjectRow(ModStore.StoreProject pr, IImage? icon)
     {
-        var grid = new Grid { MinHeight = 38, Margin = new Thickness(0, 2, 0, 2) };
+        var grid = new Grid { MinHeight = 46, Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
         grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        Control iconBox;
+        if (icon != null)
+        {
+            iconBox = new Image
+            {
+                Source = icon, Width = 40, Height = 40,
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+        else
+        {
+            var ch = string.IsNullOrWhiteSpace(pr.Name) ? "拓" : pr.Name.Trim().Substring(0, 1);
+            iconBox = new Border
+            {
+                Width = 40, Height = 40,
+                Margin = new Thickness(0, 0, 10, 0),
+                CornerRadius = new CornerRadius(8),
+                Background = Pcl.Res("ColorBrushGray4"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = ch, FontSize = 18,
+                    FontFamily = Pcl.FontFamily,
+                    Foreground = Pcl.Res("ColorBrushGray3"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+        }
+        Grid.SetColumn(iconBox, 0);
+        grid.Children.Add(iconBox);
 
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(new TextBlock
@@ -886,8 +939,8 @@ public static class SettingsPage
             }
         };
 
-        Grid.SetColumn(left, 0);
-        Grid.SetColumn(btn, 1);
+        Grid.SetColumn(left, 1);
+        Grid.SetColumn(btn, 2);
         grid.Children.Add(left);
         grid.Children.Add(btn);
         return grid;

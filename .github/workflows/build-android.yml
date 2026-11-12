@@ -58,15 +58,32 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+          # Build Scan(R)：自动发布到 scans.gradle.com，无需交互式同意条款
+          build-scan-publish: true
+          build-scan-terms-of-use-url: 'https://gradle.com/terms-of-service'
+          build-scan-terms-of-use-agree: 'yes'
 
       - name: Build ${{ matrix.channel }}
+        id: gradle_build
         working-directory: TYWLauncher-Android
         # BuildConfig.SERVER_ADDRESS 读这个环境变量；地址只存在仓库 Secrets 里
         env:
           TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
           TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
         run: |
-          gradle ${{ matrix.task }} --no-daemon --console=plain
+          gradle ${{ matrix.task }} --no-daemon --console=plain --scan
+
+      - name: Build Scan link
+        if: always()
+        run: |
+          {
+            echo "### Build Scan(R) - ${{ matrix.channel }}"
+            if [ -n "${{ steps.gradle_build.outputs.build-scan-url }}" ]; then
+              echo "[查看构建扫描](${{ steps.gradle_build.outputs.build-scan-url }})"
+            else
+              echo "本次构建未生成构建扫描链接。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect APK
         run: |
