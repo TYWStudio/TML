@@ -178,8 +178,8 @@ Friend Module ModStore
                 Dim json = JObject.Parse(raw)
                 Dim slice = TryCast(json("nodes"), JArray)
                 If slice IsNot Nothing Then
-                    For Each t In slice
-                        Dim jo = TryCast(t, JObject)
+                    For Each nodeTok As JToken In slice
+                        Dim jo = TryCast(nodeTok, JObject)
                         If jo IsNot Nothing Then nodes.Add(jo)
                     Next
                 End If
