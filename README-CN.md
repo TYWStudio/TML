@@ -233,3 +233,4 @@ TYW Launcher 提供**进程隔离、按需启用**的扩展接口，四个平台
 
 完整协议、JSON 模式、SDK 与示例：[`extensions/README.md`](extensions/README.md)。
 安全模型及其边界：[`extensions/SECURITY.md`](extensions/SECURITY.md)。
+发现安全漏洞请勿公开提交，按 [`SECURITY.md`](SECURITY.md) 私密报告。
