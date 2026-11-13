@@ -256,3 +256,4 @@ The same links are built into the launcher: **Settings → Other → Extensions 
 
 Full protocol, JSON schema, SDKs and examples: [`extensions/README.md`](extensions/README.md).
 Security model and its limits: [`extensions/SECURITY.md`](extensions/SECURITY.md).
+Found a vulnerability? Please report it privately — see [`SECURITY.md`](SECURITY.md).
