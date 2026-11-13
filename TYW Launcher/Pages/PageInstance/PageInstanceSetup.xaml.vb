@@ -64,6 +64,7 @@ Public Class PageInstanceSetup
                 Settings.Set("VersionAdvanceAssetsV2", True, Instance:=PageInstanceLeft.Instance)
             End If
 
+            Dim _RamMode = RamOptimizeEffectiveMode(PageInstanceLeft.Instance) '把旧的三态设置迁移为新的四态
             SettingService.RefreshSettings(Me)
 
             '游戏内存
@@ -83,6 +84,8 @@ Public Class PageInstanceSetup
             Settings.Reset("VersionServerLogin", Instance:=PageInstanceLeft.Instance)
             Settings.Reset("VersionArgumentIndieV2", Instance:=PageInstanceLeft.Instance)
             Settings.Reset("VersionAdvanceAssets", Instance:=PageInstanceLeft.Instance)
+            Settings.Reset("VersionRamOptimize", Instance:=PageInstanceLeft.Instance)
+            Settings.Reset("VersionRamOptimizeMode", Instance:=PageInstanceLeft.Instance)
             Configs.JavaForced.Reset(PageInstanceLeft.Instance.Config)
             JavaListRefreshWorker.Start()
 

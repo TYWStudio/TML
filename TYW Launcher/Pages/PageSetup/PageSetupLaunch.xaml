@@ -129,12 +129,17 @@
                         <local:MyRadioBox local:SettingService.Key="LaunchRamType" local:SettingService.Value="1" 
                                           Grid.Row="2" Text="自定义" x:Name="RadioRamType1" Margin="0,0,20,0" />
                         <local:MySlider Grid.Row="2" Grid.Column="1" IsEnabled="False" x:Name="SliderRamCustom" local:SettingService.Key="LaunchRamCustom" MaxValue="49" Value="13" />
-                        <local:MyCheckBox local:SettingService.Key="LaunchArgumentRam"
-                                          Grid.Row="4" Grid.ColumnSpan="3" Text="启动游戏前进行内存优化" Height="22" x:Name="CheckArgumentRam"
-                                          ToolTip="普通内存优化：清理启动器自身与系统缓存占用的内存，不需要管理员权限。&#xa;如果使用机械硬盘，这还可能会导致一小段时间的严重卡顿。&#xa;使用 --memory 参数启动 TYW Launcher 可以静默执行内存优化。" />
-                        <local:MyCheckBox local:SettingService.Key="LaunchDeepRamOptimize"
-                                          Grid.Row="6" Grid.ColumnSpan="3" Text="启动游戏前进行深度优化" Height="22" x:Name="CheckDeepRamOptimize"
-                                          ToolTip="深度优化：以管理员权限（UAC 弹窗）整理全系统中内存占用较高的进程，效果比普通内存优化更强。&#xa;每次启动游戏都会弹出一次管理员授权窗口，取消授权则只清理启动器自身。&#xa;开启后优先执行深度优化，上方的普通内存优化不再重复执行。" />
+                        <TextBlock Grid.Row="4" Grid.ColumnSpan="2" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                   Text="启动游戏前进行内存优化" Margin="0,0,0,4" />
+                        <local:MyComboBox local:SettingService.Key="LaunchRamOptimizeMode" x:Name="ComboRamOptimizeMode"
+                                          Grid.Row="6" Grid.ColumnSpan="2" Width="320" HorizontalAlignment="Left">
+                            <local:MyComboBoxItem Content="不优化" local:SettingService.Value="0"
+                                                  ToolTip="启动游戏前不进行任何内存整理。" />
+                            <local:MyComboBoxItem Content="普通优化" local:SettingService.Value="1"
+                                                  ToolTip="清理启动器自身与系统缓存占用的内存，不需要管理员权限。&#xa;如果使用机械硬盘，这还可能会导致一小段时间的严重卡顿。&#xa;使用 --memory 参数启动 TYW Launcher 可以静默执行内存优化。" />
+                            <local:MyComboBoxItem Content="深度优化（需要管理员权限）" local:SettingService.Value="2"
+                                                  ToolTip="以管理员权限（UAC 弹窗）整理全系统中内存占用较高的进程，效果比普通优化更强。&#xa;每次启动游戏都会弹出一次管理员授权窗口，取消授权则只清理启动器自身。" />
+                        </local:MyComboBox>
                         <!--<local:MyTextBox Grid.Row="2" Grid.Column="3" Width="100" VerticalAlignment="Center" Margin="30,0,0,0" Text="2048 MB" />-->
                     </Grid>
                     <Grid x:Name="PanRamDisplay" Margin="0,11,2,0" SnapsToDevicePixels="True" Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="1">

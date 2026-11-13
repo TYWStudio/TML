@@ -136,18 +136,11 @@
                 New LoaderTask(Of Process, Integer)("等待游戏窗口出现", AddressOf McLaunchWait) With {.ProgressWeight = 1},
                 New LoaderTask(Of Integer, Integer)("结束处理", AddressOf McLaunchEnd) With {.ProgressWeight = 1}
             }
-            '内存优化
-            Select Case Settings.Get(Of Integer)("VersionRamOptimize", Instance:=McInstanceSelected)
-                Case 0 '全局
-                    If Settings.Get(Of Boolean)("LaunchArgumentRam") OrElse Settings.Get(Of Boolean)("LaunchDeepRamOptimize") Then '使用全局设置（深度优化开启即视为开启优化）
-                        CType(Loaders(2), LoaderCombo(Of String)).Block = False
-                        Loaders.Insert(3, New LoaderTask(Of Integer, Integer)("内存优化", AddressOf McLaunchMemoryOptimize) With {.ProgressWeight = 30})
-                    End If
-                Case 1 '开启
-                    CType(Loaders(2), LoaderCombo(Of String)).Block = False
-                    Loaders.Insert(3, New LoaderTask(Of Integer, Integer)("内存优化", AddressOf McLaunchMemoryOptimize) With {.ProgressWeight = 30})
-                Case 2 '关闭
-            End Select
+            '内存优化（实例可以单独选择普通或深度；选择「跟随全局设置」时取全局的模式）
+            If RamOptimizeEffectiveMode(McInstanceSelected) > 0 Then
+                CType(Loaders(2), LoaderCombo(Of String)).Block = False
+                Loaders.Insert(3, New LoaderTask(Of Integer, Integer)("内存优化", AddressOf McLaunchMemoryOptimize) With {.ProgressWeight = 30})
+            End If
             Dim LaunchLoader As New LoaderCombo(Of Object)("Minecraft 启动", Loaders) With {.Show = False}
             If McLoginLoader.State = LoadState.Finished Then McLoginLoader.State = LoadState.Waiting '要求重启登录主加载器，它会自行决定是否启动副加载器
             '等待加载器执行并更新 UI
@@ -214,9 +207,66 @@ NextInner:
 
 #Region "内存优化"
 
+    ''' <summary>
+    ''' 全局内存优化模式：0 = 不优化，1 = 普通优化，2 = 深度优化。
+    ''' 旧版本用两个独立开关（LaunchArgumentRam / LaunchDeepRamOptimize）表示，首次读取时自动迁移。
+    ''' </summary>
+    Public Function RamOptimizeGlobalMode() As Integer
+        If Not Settings.HasSaved("LaunchRamOptimizeMode") Then
+            Dim Migrated As Integer
+            If Settings.Get(Of Boolean)("LaunchDeepRamOptimize") Then
+                Migrated = 2
+            ElseIf Settings.Get(Of Boolean)("LaunchArgumentRam") Then
+                Migrated = 1
+            Else
+                Migrated = 0
+            End If
+            Settings.Set("LaunchRamOptimizeMode", Migrated)
+            Logger.Info($"内存优化：已从旧的双开关迁移全局模式为 {Migrated}")
+        End If
+        Dim Mode As Integer = Settings.Get(Of Integer)("LaunchRamOptimizeMode")
+        If Mode < 0 Then Return 0
+        If Mode > 2 Then Return 2
+        Return Mode
+    End Function
+
+    ''' <summary>
+    ''' 某个实例实际生效的内存优化模式（已解析「跟随全局设置」）：0 = 不优化，1 = 普通优化，2 = 深度优化。
+    ''' 实例侧取值：0 = 跟随全局，1 = 不优化，2 = 普通优化，3 = 深度优化。
+    ''' </summary>
+    Public Function RamOptimizeEffectiveMode(Instance As McInstance) As Integer
+        Dim Raw As Integer = 0
+        If Instance IsNot Nothing Then
+            If Not Settings.HasSaved("VersionRamOptimizeMode", Instance:=Instance) Then
+                '旧键：0 = 跟随全局，1 = 开启（当时的「开启」只有普通优化），2 = 关闭
+                Dim Migrated As Integer = 0
+                Select Case Settings.Get(Of Integer)("VersionRamOptimize", Instance:=Instance)
+                    Case 1
+                        Migrated = 2
+                    Case 2
+                        Migrated = 1
+                End Select
+                Settings.Set("VersionRamOptimizeMode", Migrated, Instance:=Instance)
+                Logger.Info($"内存优化：已将版本 {Instance.Name} 的旧设置迁移为 {Migrated}")
+            End If
+            Raw = Settings.Get(Of Integer)("VersionRamOptimizeMode", Instance:=Instance)
+        End If
+        Select Case Raw
+            Case 1
+                Return 0 '不优化
+            Case 2
+                Return 1 '普通优化
+            Case 3
+                Return 2 '深度优化
+            Case Else
+                Return RamOptimizeGlobalMode() '跟随全局
+        End Select
+    End Function
+
     Private Sub McLaunchMemoryOptimize(Loader As LoaderTask(Of Integer, Integer))
         '深度优化需要管理员权限（UAC），普通优化不需要
-        Dim IsDeep As Boolean = Settings.Get(Of Boolean)("LaunchDeepRamOptimize")
+        Dim RamMode As Integer = RamOptimizeEffectiveMode(McInstanceSelected)
+        Dim IsDeep As Boolean = (RamMode = 2)
         McLaunchLog(If(IsDeep, "深度内存优化开始（需要管理员权限）", "内存优化开始"))
         Dim Finished As Boolean = False
         RunInNewThread(

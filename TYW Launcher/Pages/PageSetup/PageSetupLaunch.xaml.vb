@@ -23,6 +23,7 @@ Public Class PageSetupLaunch
     End Sub
     Public Sub Refresh()
         Try
+            RamOptimizeGlobalMode() '先把旧的双开关配置迁移到下拉列表，再刷新控件显示
             SettingService.RefreshSettings(Me)
             UpdateSkinType()
             UpdateRamType()
@@ -459,28 +460,22 @@ PreFin:
         End If
     End Sub
 
-    '开启自动内存优化的警告
-    Private Sub CheckArgumentRam_Change() Handles CheckArgumentRam.Change
+    '自动内存优化的警告：普通与深度各有提示，取消则回退到原来的选项
+    Private Sub ComboRamOptimizeMode_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboRamOptimizeMode.SelectionChanged
         If AniControlEnabled <> 0 Then Return
-        If Not CheckArgumentRam.Checked Then Return
-        If CheckDeepRamOptimize.Checked Then Return '已开启深度优化时不再重复提示
-        If MyMsgBox("内存优化会显著延长启动耗时，建议仅在内存不足时开启。" & vbCrLf &
-                    "如果你在使用机械硬盘，这还可能导致一小段时间的严重卡顿。",
-                    "提醒", "确定", "取消") = 2 Then
-            CheckArgumentRam.Checked = False
-        End If
-    End Sub
-
-    '开启深度优化的警告（需要管理员权限）
-    Private Sub CheckDeepRamOptimize_Change() Handles CheckDeepRamOptimize.Change
-        If AniControlEnabled <> 0 Then Return
-        If Not CheckDeepRamOptimize.Checked Then Return
-        If MyMsgBox("深度优化会以管理员权限整理全系统中内存占用较高的进程，效果比普通内存优化更强，但启动耗时会明显变长。" & vbCrLf &
-                    "每次启动游戏都会弹出一次管理员授权（UAC），取消授权则只清理启动器自身。" &
-                    If(WindowsUtils.HasAdminRole(), "", $"{vbCrLf}{vbCrLf}若想自动授予权限，可以右键 TYW Launcher，打开 属性 → 兼容性 → 以管理员身份运行此程序。"),
-                    "提醒", "确定", "取消") = 2 Then
-            CheckDeepRamOptimize.Checked = False
-        End If
+        Dim NeedRevert As Boolean = False
+        Select Case ComboRamOptimizeMode.SelectedIndex
+            Case 1 '普通优化
+                If MyMsgBox("普通优化会显著延长启动耗时，建议仅在内存不足时开启。" & vbCrLf &
+                            "如果你在使用机械硬盘，这还可能导致一小段时间的严重卡顿。",
+                            "提醒", "确定", "取消") = 2 Then NeedRevert = True
+            Case 2 '深度优化
+                If MyMsgBox("深度优化会以管理员权限整理全系统中内存占用较高的进程，效果比普通优化更强，但启动耗时会明显变长。" & vbCrLf &
+                            "每次启动游戏都会弹出一次管理员授权（UAC），取消授权则只清理启动器自身。" &
+                            If(WindowsUtils.HasAdminRole(), "", $"{vbCrLf}{vbCrLf}若想自动授予权限，可以右键 TYW Launcher，打开 属性 → 兼容性 → 以管理员身份运行此程序。"),
+                            "提醒", "确定", "取消") = 2 Then NeedRevert = True
+        End Select
+        If NeedRevert AndAlso e.RemovedItems.Count > 0 Then ComboRamOptimizeMode.SelectedItem = e.RemovedItems(0)
     End Sub
 
     '版本隔离提示

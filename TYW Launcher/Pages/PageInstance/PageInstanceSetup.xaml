@@ -113,10 +113,13 @@
                             <RowDefinition Height="28" />
                         </Grid.RowDefinitions>
                         <TextBlock Margin="0,6,30,0" Text="启动游戏前进行内存优化" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" />
-                        <local:MyComboBox x:Name="ComboRamOptimize" Margin="10,0,0,0" Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="2" local:SettingService.Key="VersionRamOptimize">
-                            <local:MyComboBoxItem Content="跟随全局设置" IsSelected="True" />
-                            <local:MyComboBoxItem Content="开启" />
-                            <local:MyComboBoxItem Content="关闭" />
+                        <local:MyComboBox x:Name="ComboRamOptimize" Margin="10,0,0,0" Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="2" local:SettingService.Key="VersionRamOptimizeMode">
+                            <local:MyComboBoxItem Content="跟随全局设置" local:SettingService.Value="0" IsSelected="True" />
+                            <local:MyComboBoxItem Content="不优化" local:SettingService.Value="1" />
+                            <local:MyComboBoxItem Content="普通优化" local:SettingService.Value="2"
+                                                  ToolTip="清理启动器自身与系统缓存占用的内存，不需要管理员权限。" />
+                            <local:MyComboBoxItem Content="深度优化（需要管理员权限）" local:SettingService.Value="3"
+                                                  ToolTip="以管理员权限（UAC 弹窗）整理全系统中内存占用较高的进程。&#xa;每次启动游戏都会弹出一次管理员授权窗口，取消授权则只清理启动器自身。" />
                         </local:MyComboBox>
                     </Grid>
                     <Grid x:Name="PanRamDisplay" Margin="0,11,2,0" SnapsToDevicePixels="True" Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="1">
