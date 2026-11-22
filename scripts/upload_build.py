@@ -132,6 +132,17 @@ def sha256_of(path):
     return h.hexdigest()
 
 
+def read_source_version(path):
+    """从 ModBase.vb 里读 VersionBaseName（CI 里用来保证 tag 和源码版本一致）。"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return ""
+    m = re.search(r'VersionBaseName\s+As\s+String\s*=\s*"([^"]+)"', text, re.I)
+    return m.group(1).strip() if m else ""
+
+
 def classify(platform, name, forced_channel=None, forced=None):
     """按文件名推断 平台 / 架构 / 包格式 / 通道。返回 None 表示不是要上传的东西。"""
     low = name.lower()
@@ -243,6 +254,9 @@ def upload_chunked(client, path, meta, app, args):
                     "arch": meta["arch"],
                     "pkg": meta["pkg"],
                     "name": os.path.basename(path),
+                    # 站点只留最新版：新版本传完就把同平台的旧版本连文件一起删掉
+                    "prune": "0" if args.no_prune else "1",
+                    "keep": str(max(0, args.keep)),
                 })
                 if args.hidden:
                     params["visible"] = "0"
@@ -272,6 +286,11 @@ def main():
     ap.add_argument("--notes", default="", help="写进构建说明")
     ap.add_argument("--hidden", action="store_true", help="上传后先不上架")
     ap.add_argument("--force", action="store_true", help="即使同 sha256 已存在也重传")
+    ap.add_argument("--keep", type=int, default=0, help="每个平台保留几个旧版本，默认 0（只留最新）")
+    ap.add_argument("--no-prune", action="store_true", help="不删除同平台的旧版本文件")
+    ap.add_argument("--version-file", default="TYW Launcher/Modules/Base/ModBase.vb",
+                    help="用于校验 tag 与源码版本号的源文件")
+    ap.add_argument("--no-version-check", action="store_true", help="跳过 tag 与源码版本号的比对")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划，不真的上传")
     args = ap.parse_args()
 
@@ -280,6 +299,17 @@ def main():
         log("::warning::未配置 TYW_UPLOAD_KEY，跳过上传下载站")
         return 0
     args.chunk_mb = max(1, min(16, args.chunk_mb))
+
+    # 只有"真的发了新版本号"才上传：tag 必须和源码里的 VersionBaseName 一致，
+    # 否则传上去的是旧二进制配新版本号，客户端更新日志会对不上。
+    if not args.no_version_check and args.version:
+        src_ver = read_source_version(args.version_file)
+        if src_ver and src_ver != args.version:
+            log("::error::tag 版本 %s 与源码 VersionBaseName %s 不一致，已跳过上传。"
+                "请先把 ModBase.vb 的版本号改成 %s 再打 tag。" % (args.version, src_ver, args.version))
+            return 3
+        if src_ver:
+            log("版本校验通过：tag %s = 源码 %s" % (args.version, src_ver))
 
     client = Client(args.base, args.key)
     ping = client.ping(app=args.app)
@@ -330,6 +360,7 @@ def main():
             os.path.basename(p), human(os.path.getsize(p)), m["os"], m["arch"], m["pkg"], m["channel"]))
 
     summary = []
+    pruned = []
     failed = 0
     for p, m in files:
         name = os.path.basename(p)
@@ -350,6 +381,11 @@ def main():
             res = upload_chunked(client, p, m, app_slug, args)
             state = "复用" if res.get("duplicate") else "已上传"
             log("    ok #%s %s" % (res.get("id"), res.get("title", "")))
+            gone = res.get("pruned") or []
+            if gone:
+                log("    清理旧版本 %d 个：%s" % (len(gone), ", ".join(
+                    "#%s %s" % (g.get("id"), g.get("version")) for g in gone)))
+                pruned.extend(gone)
             summary.append((name, state, "#%s" % res.get("id"), res.get("title", "")))
         except UploadError as e:
             failed += 1
@@ -362,6 +398,9 @@ def main():
 
     log("")
     log("结果：成功 %d，失败 %d，共 %d" % (len(summary) - failed, failed, len(summary)))
+    if pruned:
+        log("已清理同平台旧版本 %d 个：%s" % (len(pruned), ", ".join(
+            "#%s %s" % (g.get("id"), g.get("version")) for g in pruned)))
 
     out = os.environ.get("GITHUB_STEP_SUMMARY")
     if out:
@@ -371,6 +410,9 @@ def main():
             for row in summary:
                 fh.write("| `%s` | %s | %s | %s |\n" % row)
             fh.write("\n")
+            if pruned:
+                fh.write("已清理旧版本 %d 个：%s\n\n" % (len(pruned), "、".join(
+                    "`#%s %s`" % (g.get("id"), g.get("version")) for g in pruned)))
 
     return 1 if failed else 0
 
