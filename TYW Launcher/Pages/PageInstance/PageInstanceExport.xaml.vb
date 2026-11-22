@@ -479,6 +479,13 @@ Public Class PageInstanceExport
             Loaders.Add(New LoaderTask(Of Integer, Integer)("下载 TYW Launcher 正式版",
             Sub(Loader As LoaderTask(Of Integer, Integer))
                 DownloadLatestPCL(Loader)
+                '缓存"看着有"但不可用（被清理成 0 字节、被杀软隔离、被别的进程占着）时，
+                '直接 Copy 会抛 FileNotFoundException。这里强制重下一次再拷，仍然拿不到就报清楚。
+                If Not IsLatestPclReady() Then DownloadLatestPCL(Loader, True)
+                If Not IsLatestPclReady() Then
+                    Throw New Exception($"没能获取到最新正式版 TYW Launcher（{PathTemp}Latest.exe），" &
+                                        $"请确认服务端地址可以访问：{ServerAddress}")
+                End If
                 FileUtils.Copy(PathTemp & "Latest.exe", CacheFolder & "TYW Launcher.exe")
             End Sub) With {.ProgressWeight = 0.5, .Block = False})
         End If

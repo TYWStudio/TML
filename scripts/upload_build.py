@@ -2,14 +2,23 @@
 # -*- coding: utf-8 -*-
 """把 CI 构建产物推到下载站（POST /api/upload.php）。
 
-由 .github/workflows/upload-downloads.yml 调用，也可以本地手工跑：
+由四个平台的构建工作流直接调用（只在正式发版 tag 上执行，编译/打包失败不会走到这里）：
+
+    .github/workflows/build.yml          -> --platform windows --root dist
+    .github/workflows/build-linux.yml    -> --platform linux   --root TYWLauncher-Linux/dist
+    .github/workflows/build-macos.yml    -> --platform macos   --root TYWLauncher-macOS/dist
+    .github/workflows/build-android.yml  -> --platform android --root dist
+
+也可以本地手工跑：
 
     TYW_UPLOAD_KEY=uk_xxx python3 scripts/upload_build.py \
-        --platform linux --root artifacts --version 1.1.38
+        --platform linux --root dist --version 1.1.38
 
 约定：
   * 密钥只从环境变量 TYW_UPLOAD_KEY（或 --key）读取，不写进仓库、不打印到日志；
+    没有密钥（例如 fork）时打印警告并跳过，不让构建失败；
   * 接口地址默认 https://downloads.tywmc.cn，可用 TYW_UPLOAD_URL 覆盖；
+  * 构建直接挂在应用下（node_id=0），不塞进任何分支项目/分类；
   * 平台 / 架构 / 包格式按文件名推断（CI 产物命名是固定的），也可用 --os/--arch/--pkg 强指；
   * 一律走分片上传：每个请求都小，失败只重传那一片，几十 MB 的包过 frp 也不会中途报废。
 """
@@ -267,8 +276,9 @@ def main():
     args = ap.parse_args()
 
     if not args.key:
-        log("::error::缺少上传密钥：设置环境变量 TYW_UPLOAD_KEY（GitHub Secrets）后重试")
-        return 2
+        # fork / 没配 Secret 时不要因为上传把整个发布构建搞挂
+        log("::warning::未配置 TYW_UPLOAD_KEY，跳过上传下载站")
+        return 0
     args.chunk_mb = max(1, min(16, args.chunk_mb))
 
     client = Client(args.base, args.key)

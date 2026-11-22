@@ -544,29 +544,52 @@ Friend Module ModSecret
         If TriggerRestart Then Process.Start(OldFileName)
     End Sub
 
+    ''' <summary>缓存里的最新正式版是否可用（存在且不是 0 字节的空文件）。</summary>
+    Friend Function IsLatestPclReady() As Boolean
+        Try
+            Dim LatestPath As String = PathTemp & "Latest.exe"
+            If Not FileUtils.Exists(LatestPath) Then Return False
+            Return New FileInfo(LatestPath).Length > 1024
+        Catch
+            Return False
+        End Try
+    End Function
+
     ''' <summary>
     ''' 确保 PathTemp/Latest.exe 是最新正式版的 TYW Launcher，它会被用于整合包打包。
-    ''' 如果不是，则下载一个。
+    ''' 找不到（或只是 0 字节的残缺文件）就自动下载；Force 时无视缓存强制重下。
     ''' </summary>
-    Friend Sub DownloadLatestPCL(Optional LoaderToSyncProgress As LoaderBase = Nothing)
+    Friend Sub DownloadLatestPCL(Optional LoaderToSyncProgress As LoaderBase = Nothing, Optional Force As Boolean = False)
+        Dim LatestPath As String = PathTemp & "Latest.exe"
         Try
-            If FileUtils.Exists(PathTemp & "Latest.exe") Then Return
+            If Not Force AndAlso IsLatestPclReady() Then Return
             If String.IsNullOrWhiteSpace(ServerAddress) Then
                 Throw New Exception("未配置服务端地址（设置 → 启动器 → 服务端地址，或程序目录下的 server.txt）")
+            End If
+            '缓存目录可能被清理工具删掉过，下载前先建回来
+            DirectoryUtils.Create(PathTemp)
+            '残缺文件必须先删：下载器看到同名文件可能会续传，结果还是坏文件
+            If FileUtils.Exists(LatestPath) Then
+                Try
+                    FileUtils.Delete(LatestPath)
+                Catch ex As Exception
+                    Throw New Exception("无法删除旧的 Latest.exe（可能被占用），请手动删除后重试：" & LatestPath, ex)
+                End Try
             End If
             '★ LoaderDownload.Start(Input) 会把入参强制转成 IEnumerable(Of NetFile)。
             '   以前这里直接把外层的 LoaderTask(Of Integer, Integer) 传进去，
             '   导出整合包时必定抛 InvalidCastException（"无法将 LoaderTask`2 强制转换为 IEnumerable`1[NetFile]"）。
             '   与其它下载启动器的写法保持一致：用 LoaderCombo 包一层，不传 Input。
             Dim DlLoader As New LoaderDownload("下载 TYW Launcher 正式版",
-                New List(Of NetFile) From {New NetFile({ServerAddress & "TYW Launcher.exe"}, PathTemp & "Latest.exe")})
+                New List(Of NetFile) From {New NetFile({ServerAddress & "TYW Launcher.exe"}, LatestPath)})
             Dim Task As New LoaderCombo(Of Integer)("下载 TYW Launcher 正式版", {DlLoader})
             Task.WaitForExit(, LoaderToSyncProgress)
-            If Task.State <> LoadState.Finished OrElse Not FileUtils.Exists(PathTemp & "Latest.exe") Then
-                Throw New Exception("下载未完成或未得到文件")
+            If Task.State <> LoadState.Finished OrElse Not IsLatestPclReady() Then
+                Throw New Exception("下载未完成或得到的文件不可用")
             End If
         Catch ex As Exception
-            Throw New Exception("从服务端下载 TYW Launcher 正式版失败（" & ServerAddress & "）：" & ex.Message, ex)
+            Throw New Exception("从服务端下载 TYW Launcher 正式版失败（" & ServerAddress & "）：" & ex.Message &
+                                vbCrLf & "目标文件：" & LatestPath, ex)
         End Try
     End Sub
 

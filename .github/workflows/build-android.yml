@@ -99,6 +99,18 @@ jobs:
           name: ${{ matrix.output }}
           path: dist/*
 
+      # 只有正式发版 tag（v*）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
+      # 构建直接挂在该应用下（不属于任何分支项目 = 各处平台共用一处，不占分类）。
+      - name: Upload to download site (tag only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
+          TYW_UPLOAD_URL: ${{ secrets.TYW_UPLOAD_URL }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          python3 scripts/upload_build.py --platform android --root dist \
+            --version "${GITHUB_REF_NAME#v}" --notes "GitHub Actions · android-${{ matrix.channel }}"
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')

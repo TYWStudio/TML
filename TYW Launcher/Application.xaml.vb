@@ -121,6 +121,23 @@ Public Class Application
                 MsgBoxStyle.Critical, "运行环境错误")
                 Environment.[Exit](ProcessReturnValues.Cancel)
             End Try
+            '改名前的版本把默认缓存目录留在了 %TEMP%\PCL\，而且这个值可能被存进设置里继续沿用，
+            '于是升级后还会看到一个本不该再出现的 "PCL" 文件夹。这里只重置"指向临时目录"的旧值
+            '（用户自己挑的非临时目录不动），统一回落到默认的 %TEMP%\TYW Launcher\。
+            Try
+                Dim CacheSetting As String = Settings.Get(Of String)("SystemSystemCache")
+                If Not String.IsNullOrWhiteSpace(CacheSetting) Then
+                    Dim TempRoot As String = PathUtils.AddSlashSuffix(Path.GetTempPath())
+                    Dim CacheFull As String = PathUtils.AddSlashSuffix(CacheSetting).Replace("/", "\")
+                    If CacheFull.StartsWithF(TempRoot) AndAlso Not PathUtils.IsSame(CacheFull, TempRoot & "TYW Launcher\") Then
+                        Logger.Info("重置指向临时目录的旧缓存设置：" & CacheFull)
+                        Settings.Set("SystemSystemCache", "")
+                        PathTemp = TempRoot & "TYW Launcher\"
+                    End If
+                End If
+            Catch ex As Exception
+                Logger.Warn(ex, "重置旧缓存设置失败")
+            End Try
 RetryCacheCheck:
             Try
                 DirectoryUtils.Create(PathTemp)
