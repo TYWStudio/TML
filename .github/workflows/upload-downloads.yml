@@ -1,0 +1,146 @@
+name: Upload to download site
+
+# 构建完成后把产物推到下载站（downloads.tywmc.cn）。
+# 触发：
+#   * workflow_run —— 四个平台的构建在**正式发版 tag（v*）**上跑完、结论成功时自动上传；
+#   * workflow_dispatch —— 手动补传某个平台最近一次成功构建的产物。
+#
+# 密钥与接口地址都只从仓库 Secrets 读，仓库、产物、日志里都不出现明文：
+#   TYW_UPLOAD_KEY  后台「上传密钥」页生成的 uk_ 密钥（必需，没有就跳过上传）
+#   TYW_UPLOAD_URL  接口地址（可选，默认 https://downloads.tywmc.cn）
+
+on:
+  workflow_run:
+    workflows: ["Build Windows", "Build Linux", "Build macOS", "Build Android"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: '上传哪个平台的产物'
+        required: true
+        type: choice
+        options: [windows, linux, macos, android]
+      run_id:
+        description: '产物所在的工作流运行 ID（留空 = 该平台最近一次成功构建）'
+        required: false
+        default: ''
+      channel:
+        description: '强制通道（留空 = 按文件名判断：Release→release，Snapshot→debug）'
+        required: false
+        default: ''
+      dry_run:
+        description: '只打印计划，不真的上传'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+# 四个平台各自触发一次，串行执行，避免同时往一个应用里写
+concurrency:
+  group: upload-downloads
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve build run
+        id: t
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          IN_PLATFORM: ${{ github.event.inputs.platform }}
+          IN_RUN_ID: ${{ github.event.inputs.run_id }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            PLATFORM="$IN_PLATFORM"
+            TARGET="$IN_RUN_ID"
+          else
+            case "$RUN_NAME" in
+              "Build Windows") PLATFORM=windows ;;
+              "Build Linux")   PLATFORM=linux ;;
+              "Build macOS")   PLATFORM=macos ;;
+              "Build Android") PLATFORM=android ;;
+              *) echo "::error::不认识的工作流：$RUN_NAME"; exit 1 ;;
+            esac
+            TARGET="$RUN_ID"
+          fi
+          if [ -z "$TARGET" ]; then
+            case "$PLATFORM" in
+              windows) WF="Build Windows" ;;
+              linux)   WF="Build Linux" ;;
+              macos)   WF="Build macOS" ;;
+              android) WF="Build Android" ;;
+            esac
+            TARGET=$(gh run list --workflow "$WF" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          [ -n "$TARGET" ] || { echo "::error::找不到可用的构建运行"; exit 1; }
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET" --jq .head_sha)
+          REF=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET" --jq .head_branch)
+          {
+            echo "platform=$PLATFORM"
+            echo "run_id=$TARGET"
+            echo "sha=$SHA"
+            echo "ref=$REF"
+          } >> "$GITHUB_OUTPUT"
+          echo "构建：$PLATFORM / run $TARGET / $REF @ ${SHA:0:8}"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.t.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts
+          merge-multiple: true
+
+      # 版本号直接读源码里的 VersionBaseName，和客户端显示的完全一致；
+      # 读不到（比如老提交）就退回 tag 名。
+      - name: Resolve version
+        id: v
+        run: |
+          set -euo pipefail
+          SHA="${{ steps.t.outputs.sha }}"
+          URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}/TYW%20Launcher/Modules/Base/ModBase.vb"
+          VER=$(curl -fsSL "$URL" 2>/dev/null \
+            | sed -n 's/.*VersionBaseName As String = "\([0-9][0-9.]*\)".*/\1/p' | head -1 || true)
+          if [ -z "$VER" ]; then
+            VER="${{ steps.t.outputs.ref }}"
+            VER="${VER#v}"
+            echo "::warning::读不到 VersionBaseName，改用 tag：$VER"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "版本号：$VER"
+
+      - name: Upload to downloads site
+        env:
+          TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
+          TYW_UPLOAD_URL: ${{ secrets.TYW_UPLOAD_URL }}
+          CHANNEL: ${{ github.event.inputs.channel }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          VERSION: ${{ steps.v.outputs.version }}
+          PLATFORM: ${{ steps.t.outputs.platform }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TYW_UPLOAD_KEY:-}" ]; then
+            echo "::warning::没有配置 TYW_UPLOAD_KEY，跳过上传。在仓库 Settings → Secrets and variables → Actions 里加一把后台「上传密钥」页生成的密钥即可。"
+            exit 0
+          fi
+          echo "产物清单："
+          find artifacts -type f -printf '%10s  %p\n' | sort -k2 || true
+          ARGS=(--platform "$PLATFORM" --root artifacts --version "$VERSION")
+          if [ -n "${CHANNEL:-}" ]; then ARGS+=(--channel "$CHANNEL"); fi
+          if [ "${DRY_RUN:-}" = "true" ]; then ARGS+=(--dry-run); fi
+          python3 scripts/upload_build.py "${ARGS[@]}"

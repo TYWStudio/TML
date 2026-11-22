@@ -136,7 +136,8 @@ So that researchers do not re-report known limitations:
 
 - **No secrets in the repository.** The server address, OAuth client ID and extension-store app credential are empty
   strings in source and are injected by CI **at build time** from GitHub Secrets; the public repository and public CI
-  artifacts are offline by default.
+  artifacts are offline by default. The **build-upload key** that publishes release artifacts to the download site is
+  likewise stored only in GitHub Secrets (`TYW_UPLOAD_KEY`) and never written into the repository or the artifacts.
 - **No credential shown at runtime.** The client keeps the extension-store credential in memory only and never
   displays it in the UI (not even masked); it is sent solely as an `X-Api-Key` request header.
 - **Extensions are denied by default.** A discovered extension starts disabled and can only be enabled after the user
@@ -277,6 +278,7 @@ Android（8.0+，arm64-v8a）。同一个问题若存在于多端，请在报告
 
 - **密钥不入库**：服务端地址、OAuth Client ID、拓展商店应用凭证等敏感配置在源码中恒为空值，
   只由 CI 在**编译期**从 GitHub Secrets 注入；开源仓库与公开 CI 产物默认是离线的。
+  **发布到下载站的构建上传密钥**同样只存在 GitHub Secrets（`TYW_UPLOAD_KEY`），不写进仓库、不带进产物。
 - **运行时密钥不外显**：客户端仅在内存中使用拓展商店凭证，界面不显示密钥（连掩码都不显示），
   只以 `X-Api-Key` 请求头发送。
 - **扩展默认拒绝**：扫描到的扩展一律处于禁用态，需用户确认名称 / 作者 / 版本 / 权限 / SHA-256
