@@ -7,7 +7,9 @@ plugins {
 }
 
 // 版本基线。三通道共用同一个 versionName，通道后缀由各自的 buildType 追加。
-val baseVersionName = "1.1.37"
+// 发版时 CI 通过 TYW_VERSION 注入 tag 上的版本号（保证 APK 里的版本和 tag 一致）；
+// 本地不设这个环境变量时用源码里的基线值。
+val baseVersionName = System.getenv("TYW_VERSION")?.takeIf { it.isNotBlank() } ?: "1.1.38"
 
 android {
     namespace = "cn.tyw.launcher"

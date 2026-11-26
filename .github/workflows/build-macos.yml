@@ -10,18 +10,33 @@ on:
         description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
+      channel:
+        description: '只构建哪个通道（手动触发只编译、不发布产物）'
+        type: choice
+        options: [auto, release, snapshot, both]
+        default: auto
 
 permissions:
   contents: write
 
-env:
-  VERSION: '1.1.37'
-  # 公开仓库只出正式版 + 快照版。内测版（Beta）只在本地构建，不进开源产物。
-  TYW_CHANNELS: 'Release Snapshot'
-
 jobs:
+  # 发布裁决：只有打 v* tag 才产出并发布产物，tag 带 -snapshot/-beta 等后缀就出快照版
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.meta.outputs.publish }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      channels: ${{ steps.meta.outputs.channels }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: python3 scripts/release_meta.py --platform macos --channel "${{ github.event.inputs.channel || 'auto' }}"
+
   build:
     name: macOS ${{ matrix.arch }}
+    needs: plan
     # macos-latest = Apple Silicon（macos-14 标签已退役，写死会直接取消任务）。
     # osx-x64 也在 arm64 机器上交叉发布：
     # 托管代码不需要本地编译，只要下载对应架构的 runtime pack 即可。
@@ -30,6 +45,9 @@ jobs:
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
       TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
+      # 版本号与通道都由 plan 决定：发版时用 tag 版本，平时用源码版本、两个通道都编译
+      VERSION: ${{ needs.plan.outputs.version }}
+      TYW_CHANNELS: ${{ needs.plan.outputs.channels }}
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +85,11 @@ jobs:
             unzip -l "$f" | grep -q 'Contents/Info.plist'
           done
           rm -rf /tmp/vfy && mkdir -p /tmp/vfy
-          unzip -q "dist/TYWLauncher-macos-${{ matrix.arch }}.zip" -d /tmp/vfy
+          # 本次可能只出了一个通道：优先验正式版，没有就验快照版
+          Z="dist/TYWLauncher-macos-${{ matrix.arch }}.zip"
+          [ -f "$Z" ] || Z="dist/TYWLauncher-macos-${{ matrix.arch }}-snapshot.zip"
+          [ -f "$Z" ] || { echo "::error::找不到 ${{ matrix.arch }} 的 zip"; exit 1; }
+          unzip -q "$Z" -d /tmp/vfy
           file "/tmp/vfy/TYW Launcher.app/Contents/MacOS/TYWLauncher" | tee /tmp/vfy/arch.txt
           grep -q "$want" /tmp/vfy/arch.txt
 
@@ -91,6 +113,7 @@ jobs:
           test "$n" -eq "$want"
 
       - name: Upload artifact
+        if: needs.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: TYWLauncher-macos-${{ matrix.arch }}
@@ -100,24 +123,33 @@ jobs:
             TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
           if-no-files-found: error
 
-      # 只有正式发版 tag（v*）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
+      # 只有发布新版本（v* tag）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
       # 构建直接挂在该应用下（不属于任何分支项目 = 各处平台共用一处，不占分类）。
       - name: Upload to download site (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.plan.outputs.publish == 'true'
         env:
           TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
           TYW_UPLOAD_URL: ${{ secrets.TYW_UPLOAD_URL }}
           PYTHONIOENCODING: utf-8
         run: |
           python3 scripts/upload_build.py --platform macos --root TYWLauncher-macOS/dist \
-            --version "${GITHUB_REF_NAME#v}" --notes "GitHub Actions · macos-${{ matrix.arch }}"
+            --version "${{ needs.plan.outputs.version }}" --notes "GitHub Actions · macos-${{ matrix.arch }}"
 
-      - name: Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+  # 两个架构都构建完再统一发 Release：多个 job 同时创建同一个 Release 会互相打架
+  release:
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            TYWLauncher-macOS/dist/TYWLauncher-macos-*.zip
-            TYWLauncher-macOS/dist/TYWLauncher-macos-*.dmg
-            TYWLauncher-macOS/dist/SHA256SUMS-macos.txt
+          files: assets/*
           generate_release_notes: true
+          prerelease: ${{ needs.plan.outputs.prerelease == 'true' }}
+          name: ${{ needs.plan.outputs.tag }}（${{ needs.plan.outputs.channel == 'snapshot' && '快照版' || '正式版' }}）

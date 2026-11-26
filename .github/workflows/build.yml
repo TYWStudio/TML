@@ -10,25 +10,41 @@ on:
         description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
+      channel:
+        description: '只构建哪个通道（手动触发只编译、不发布产物）'
+        type: choice
+        options: [auto, release, snapshot, both]
+        default: auto
 
 permissions:
   contents: write
 
 jobs:
+  # 发布裁决：只有打 v* tag（发布新版本）才产出并发布产物；
+  # tag 带 -snapshot / -beta / -preview 等后缀就出快照版，否则出正式版。
+  # 平时 push main 只编译两个通道做验证，不上传 artifact、不发布。
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.meta.outputs.publish }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      channels: ${{ steps.meta.outputs.channels }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: python3 scripts/release_meta.py --platform windows --channel "${{ github.event.inputs.channel || 'auto' }}"
+
   build:
+    needs: plan
     runs-on: windows-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # 公开仓库只出两个通道：Release=正式版，Snapshot=快照版。
-          # 内测版（Debug / Beta）只在本地用 _deploy\build.py 构建，不进开源产物。
-          - configuration: Release
-            binary: TYW Launcher.exe
-            artifact: TYWLauncher-windows-x64
-          - configuration: Snapshot
-            binary: TYW Launcher Snapshot.exe
-            artifact: TYWLauncher-windows-x64-snapshot
+      # 矩阵由 plan 给：正式版 tag 只有 Release，快照版 tag 只有 Snapshot，
+      # 普通 push 两个通道都编译（只为验证能编译，产物不外发）。
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     # 服务端地址与 API 密钥都不写在仓库里：CI 在编译前临时注入 ModSecret.vb
     # （scripts/inject_secrets.py），工作区用完即销毁，源码永远只有空值。
     env:
@@ -69,16 +85,17 @@ jobs:
           Get-ChildItem dist | Format-Table Name,Length | Out-String
 
       - name: Upload artifact
+        if: needs.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*
           if-no-files-found: error
 
-      # 只有正式发版 tag（v*）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
+      # 只有发布新版本（v* tag）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
       # 构建直接挂在该应用下（不属于任何分支项目 = 各处平台共用一处，不占分类）。
       - name: Upload to download site (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.plan.outputs.publish == 'true'
         shell: bash
         env:
           TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
@@ -86,12 +103,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           python scripts/upload_build.py --platform windows --root dist \
-            --version "${GITHUB_REF_NAME#v}" --notes "GitHub Actions · ${{ matrix.configuration }}"
+            --version "${{ needs.plan.outputs.version }}" --notes "GitHub Actions · ${{ matrix.configuration }}"
 
-  # 两个通道的产物都在同一个 tag 里发，所以汇总后再上传，避免两个 job 抢同一个 Release
+  # 汇总产物后统一发 Release，避免多个 job 抢同一个 Release
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -104,3 +121,5 @@ jobs:
         with:
           files: assets/*
           generate_release_notes: true
+          prerelease: ${{ needs.plan.outputs.prerelease == 'true' }}
+          name: ${{ needs.plan.outputs.tag }}（${{ needs.plan.outputs.channel == 'snapshot' && '快照版' || '正式版' }}）

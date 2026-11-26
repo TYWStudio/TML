@@ -11,28 +11,38 @@ on:
         description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
+      channel:
+        description: '只构建哪个通道（手动触发只编译、不发布产物）'
+        type: choice
+        options: [auto, release, snapshot, both]
+        default: auto
 
 permissions:
   contents: write
 
 jobs:
+  # 发布裁决：只有打 v* tag 才产出并发布产物，tag 带 -snapshot/-beta 等后缀就出快照版
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.meta.outputs.publish }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      channels: ${{ steps.meta.outputs.channels }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: python3 scripts/release_meta.py --platform android --channel "${{ github.event.inputs.channel || 'auto' }}"
+
   build:
+    needs: plan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # 公开仓库只出两个通道的 APK；内测版（debug 风格）只在本地构建。
-          - channel: release
-            task: assembleRelease
-            dir: release
-            file: TYWLauncher-android.apk
-            output: TYWLauncher-android.apk
-          - channel: snapshot
-            task: assembleSnapshot
-            dir: snapshot
-            file: TYWLauncher-android-snapshot.apk
-            output: TYWLauncher-android-snapshot.apk
+      # 正式版 tag 只出 release APK，快照版 tag 只出 snapshot APK，普通 push 两个都编译
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +80,8 @@ jobs:
         env:
           TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
           TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
+          # 发版时把 tag 版本写进 APK；平时留空则用 build.gradle.kts 里的基线
+          TYW_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           gradle ${{ matrix.task }} --no-daemon --console=plain --scan
 
@@ -94,26 +106,27 @@ jobs:
           cd dist && sha256sum "${{ matrix.output }}" > "${{ matrix.output }}.sha256"
 
       - name: Upload artifact
+        if: needs.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.output }}
           path: dist/*
 
-      # 只有正式发版 tag（v*）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
+      # 只有发布新版本（v* tag）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
       # 构建直接挂在该应用下（不属于任何分支项目 = 各处平台共用一处，不占分类）。
       - name: Upload to download site (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.plan.outputs.publish == 'true'
         env:
           TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
           TYW_UPLOAD_URL: ${{ secrets.TYW_UPLOAD_URL }}
           PYTHONIOENCODING: utf-8
         run: |
           python3 scripts/upload_build.py --platform android --root dist \
-            --version "${GITHUB_REF_NAME#v}" --notes "GitHub Actions · android-${{ matrix.channel }}"
+            --version "${{ needs.plan.outputs.version }}" --notes "GitHub Actions · android-${{ matrix.channel }}"
 
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -126,3 +139,5 @@ jobs:
         with:
           files: assets/*
           fail_on_unmatched_files: false
+          prerelease: ${{ needs.plan.outputs.prerelease == 'true' }}
+          name: ${{ needs.plan.outputs.tag }}（${{ needs.plan.outputs.channel == 'snapshot' && '快照版' || '正式版' }}）

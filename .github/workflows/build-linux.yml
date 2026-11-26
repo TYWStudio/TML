@@ -10,13 +10,33 @@ on:
         description: '临时覆盖服务端地址（一般留空；留空时用仓库 Secrets 里的 TYW_SERVER_URL）'
         required: false
         default: ''
+      channel:
+        description: '只构建哪个通道（手动触发只编译、不发布产物）'
+        type: choice
+        options: [auto, release, snapshot, both]
+        default: auto
 
 permissions:
   contents: write
 
 jobs:
+  # 发布裁决：只有打 v* tag 才产出并发布产物，tag 带 -snapshot/-beta 等后缀就出快照版
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.meta.outputs.publish }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      channels: ${{ steps.meta.outputs.channels }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: python3 scripts/release_meta.py --platform linux --channel "${{ github.event.inputs.channel || 'auto' }}"
+
   build:
     name: Linux ${{ matrix.arch }}
+    needs: plan
     # 用同架构的 runner：AppImage 的打包工具是目标架构的二进制，交叉跑会 exec format error
     runs-on: ${{ matrix.runner }}
     # 服务端地址不写在仓库里：由仓库 Secrets 的 TYW_SERVER_URL 在**编译期**注入
@@ -25,6 +45,9 @@ jobs:
     env:
       TYW_SERVER_URL: ${{ github.event.inputs.server_url || secrets.TYW_SERVER_URL }}
       TYW_STORE_API_KEY: ${{ secrets.TYW_STORE_API_KEY }}
+      # 本次要出哪些通道：正式版 tag = Release，快照版 tag = Snapshot，
+      # 普通 push = 两个都编译（只验证，不发产物）
+      TYW_CHANNELS: ${{ needs.plan.outputs.channels }}
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +90,7 @@ jobs:
         working-directory: TYWLauncher-Linux/src
         run: |
           set -e
-          for ch in Release Snapshot; do
+          for ch in $TYW_CHANNELS; do
             echo "::group::publish $ch"
             dotnet publish TYW.Desktop/TYW.Desktop.csproj \
               -c Release -r ${{ matrix.rid }} --self-contained true \
@@ -77,16 +100,19 @@ jobs:
           done
 
       # 一次出全部 5 种包：tar.gz / deb / rpm / pkg.tar.zst / AppImage
-      # 版本号直接从源码取（ModApp.vb 的 Release 分支），避免和客户端对不上
+      # 发版时版本号用 tag 上的（plan 输出），平时用源码里的，避免和客户端对不上
       # AppImage 的 runtime 已内置在 packaging/runtime/，不需要联网下载
       - name: Package all formats
         working-directory: TYWLauncher-Linux
+        env:
+          # 发版时用 tag 上的版本号（去掉 -snapshot 后缀），和下载站、客户端显示一致
+          TYW_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -e
-          VER="$(sed -n 's/.*Case Else : Return "\([0-9][0-9.]*\)".*/\1/p' src/TYW.Core/Base/ModApp.vb | head -1)"
+          VER="${TYW_VERSION:-$(sed -n 's/.*Case Else : Return "\([0-9][0-9.]*\)".*/\1/p' src/TYW.Core/Base/ModApp.vb | head -1)}"
           [ -n "$VER" ] || { echo '::error::读不到版本号'; exit 1; }
-          echo "版本号：$VER"
-          for ch in Release Snapshot; do
+          echo "版本号：$VER｜通道：$TYW_CHANNELS"
+          for ch in $TYW_CHANNELS; do
             echo "::group::package $ch"
             TYW_CHANNEL="$ch" TYW_SRC_DIR="$PWD/out/ch-$ch" \
               bash packaging/build.sh "$VER" ${{ matrix.arch }}
@@ -105,9 +131,11 @@ jobs:
           done
           echo "已确认包内不含 server.txt"
 
-          # 每种格式、每个通道都要有：2 通道 × 5 格式 = 10 个包
+          # 每种格式、每个要出的通道都得有：通道数 × 5 格式
           echo "--- dist ---"
           ls -lh dist
+          want=$(echo $TYW_CHANNELS | wc -w | tr -d ' ')
+          echo "本次通道数：$want"
           n_tar=$(ls dist/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
           n_deb=$(ls dist/*.deb 2>/dev/null | wc -l | tr -d ' ')
           n_rpm=$(ls dist/*.rpm 2>/dev/null | wc -l | tr -d ' ')
@@ -115,7 +143,7 @@ jobs:
           n_app=$(ls dist/*.AppImage 2>/dev/null | wc -l | tr -d ' ')
           echo "tar.gz=$n_tar deb=$n_deb rpm=$n_rpm pacman=$n_pac appimage=$n_app"
           for pair in "tar.gz:$n_tar" "deb:$n_deb" "rpm:$n_rpm" "pkg.tar.zst:$n_pac" "AppImage:$n_app"; do
-            [ "${pair#*:}" -ge 2 ] || { echo "::error::缺少 ${pair%:*} 包"; exit 1; }
+            [ "${pair#*:}" -ge "$want" ] || { echo "::error::缺少 ${pair%:*} 包"; exit 1; }
           done
           cp dist/SHA256SUMS "dist/SHA256SUMS-linux-${{ matrix.arch }}.txt"
           rm -f dist/SHA256SUMS
@@ -154,27 +182,40 @@ jobs:
           echo "全部格式校验通过"
 
       - name: Upload artifact
+        if: needs.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: TYWLauncher-linux-${{ matrix.arch }}
           path: TYWLauncher-Linux/dist/*
           if-no-files-found: error
 
-      # 只有正式发版 tag（v*）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
+      # 只有发布新版本（v* tag）才推下载站：普通 push 不上传，编译/打包任何一步失败也走不到这里。
       # 构建直接挂在该应用下（不属于任何分支项目 = 各处平台共用一处，不占分类）。
       - name: Upload to download site (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.plan.outputs.publish == 'true'
         env:
           TYW_UPLOAD_KEY: ${{ secrets.TYW_UPLOAD_KEY }}
           TYW_UPLOAD_URL: ${{ secrets.TYW_UPLOAD_URL }}
           PYTHONIOENCODING: utf-8
         run: |
           python3 scripts/upload_build.py --platform linux --root TYWLauncher-Linux/dist \
-            --version "${GITHUB_REF_NAME#v}" --notes "GitHub Actions · linux-${{ matrix.arch }}"
+            --version "${{ needs.plan.outputs.version }}" --notes "GitHub Actions · linux-${{ matrix.arch }}"
 
-      - name: Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+  # 两个架构都构建完再统一发 Release：多个 job 同时创建同一个 Release 会互相打架
+  release:
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: TYWLauncher-Linux/dist/*
+          files: assets/*
           generate_release_notes: true
+          prerelease: ${{ needs.plan.outputs.prerelease == 'true' }}
+          name: ${{ needs.plan.outputs.tag }}（${{ needs.plan.outputs.channel == 'snapshot' && '快照版' || '正式版' }}）
