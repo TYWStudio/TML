@@ -10,7 +10,8 @@
 
 > 非 Minecraft 官方产品。未经 Mojang 或 Microsoft 认可或关联。
 
-本项目以 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 许可发布。
+本项目以 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 许可发布。其中源自 PCL2 的部分
+同时继续适用上游《PCL 分发有限许可》——见 [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt)。
 
 > ## ⚠️ 第三方代码声明（必读）
 >
@@ -25,7 +26,7 @@
 >
 > 我们**没有复制 FCL 的任何 Java/Kotlin 源码**，只按相同的布局语义用 Kotlin 独立实现；FCL 的类名、包名、资源、图标
 > 均未引入。逐文件的范围与许可证说明见 **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**。
-> 本项目的 Windows 部分基于 **PCL2**（© LTCat / Meloong-Git），许可见 [`LICENCE`](LICENCE)。
+> 本项目的 Windows 部分基于 **PCL2**（© LTCat / Meloong-Git），上游许可见 [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt)（原文未改动）。
 
 - 源码（可审计）：https://github.com/TYWStudio/TML
 - 问题反馈：https://github.com/TYWStudio/TML/issues
@@ -186,7 +187,7 @@ MeloongCore/              Git 子模块（Apache-2.0，https://github.com/Meloon
 
 完整细节——包括涉及的确切文件以及复制 / 未复制了什么——见 **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**。摘要：
 
-- 原始 PCL2 代码 © LTCat / Meloong-Git，按其自身许可发布——见 [`LICENCE`](LICENCE)（上游许可文件，保持未修改）。
+- 原始 PCL2 代码 © LTCat / Meloong-Git，继续适用上游《PCL 分发有限许可》——见 [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt)（上游许可文件原文，逐字保留）。本仓库的修改与新增代码以 [`LICENCE`](LICENCE)（CC BY-NC 4.0）发布。
 - [`MeloongCore`](MeloongCore/LICENSE.txt) 由 Meloong/PCL 社区以 **Apache-2.0** 许可。
 - **Android 触控操作** 参照 **[Fold Craft Launcher（FCL）](https://github.com/FCL-Team/FoldCraftLauncher)**（GPL-3.0）：
   控件布局数据模型、默认键位，以及控件的放置与编辑方式都遵循 FCL 的 `ControlLayout`。FCL 是独立项目，未打包于此——

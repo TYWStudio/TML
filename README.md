@@ -10,7 +10,8 @@ launch the copy of the game they already own. No ads, no in-app purchases, no mo
 
 > NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
 
-This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). The PCL2-derived parts
+additionally remain subject to the upstream **PCL Distribution Limited License** — see [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt).
 
 > ## ⚠️ Third-party code notice (must read)
 >
@@ -27,7 +28,7 @@ This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licens
 > We **did not copy any Java/Kotlin source from FCL**; the controls were implemented independently in
 > Kotlin following the same layout semantics, and FCL's class names, package names, resources and icons
 > were not introduced. Per-file scope and license details are in **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**.
-> The Windows part of this project is based on **PCL2** (© LTCat / Meloong-Git); see [`LICENCE`](LICENCE) for its license.
+> The Windows part of this project is based on **PCL2** (© LTCat / Meloong-Git); see [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt) for the upstream license, kept verbatim.
 
 - Source code (auditable): https://github.com/TYWStudio/TML
 - Issue tracker: https://github.com/TYWStudio/TML/issues
@@ -203,7 +204,7 @@ MeloongCore/              Git submodule (Apache-2.0, https://github.com/Meloong-
 Full details — including the exact files involved and what was / was not copied — are in
 **[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)**. Summary:
 
-- The original PCL2 code is © LTCat / Meloong-Git, released under its own license — see [`LICENCE`](LICENCE) (the upstream license file, kept unmodified).
+- The original PCL2 code is © LTCat / Meloong-Git and remains under the upstream **PCL Distribution Limited License** — see [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt) (verbatim copy of the upstream license file). Modifications and new code added in this repository are released under [`LICENCE`](LICENCE) (CC BY-NC 4.0).
 - [`MeloongCore`](MeloongCore/LICENSE.txt) is licensed under **Apache-2.0** by the Meloong/PCL community.
 - **Android touch controls** are modelled on **[Fold Craft Launcher (FCL)](https://github.com/FCL-Team/FoldCraftLauncher)**
   (GPL-3.0): the control layout data model, the default keymap, and the way controls are placed and edited all follow

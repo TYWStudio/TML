@@ -13,7 +13,7 @@ TYW Launcher 基于多个开源项目。本文件列出**每一个**我们用到
 |---|---|
 | 上游 | https://github.com/Meloong-Git/PCL |
 | 作者 | © LTCat / 龙腾猫跃，及 PCL 社区贡献者 |
-| 许可证 | 见仓库根 [`LICENCE`](LICENCE)（上游许可文件，原样保留，未做任何修改） |
+| 许可证 | 上游《PCL 分发有限许可》与《PCL 存储库合理使用指南》，原文见 [`PCL2-LICENCE.txt`](PCL2-LICENCE.txt)（上游 `LICENCE` 原文逐字保留） |
 | 涉及范围 | **Windows 版**的绝大部分：`Modules/`、`Pages/`、`Controls/`、`Styles/`、`Images/`、启动器核心逻辑（版本解析、下载、启动、账户、设置） |
 
 我们做了什么：
