@@ -37,6 +37,7 @@ jobs:
         run: python3 scripts/release_meta.py --platform android --channel "${{ github.event.inputs.channel || 'auto' }}"
 
   build:
+    name: Android ${{ matrix.channel }}
     needs: plan
     runs-on: ubuntu-latest
     strategy:

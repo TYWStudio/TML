@@ -38,6 +38,7 @@ jobs:
         run: python3 scripts/release_meta.py --platform windows --channel "${{ github.event.inputs.channel || 'auto' }}"
 
   build:
+    name: Windows ${{ matrix.configuration }}
     needs: plan
     runs-on: windows-latest
     strategy:
