@@ -163,7 +163,9 @@ def main(argv):
         channel_keys = [CHANNEL_NAMES[channel]]
 
     channels = " ".join(channel_keys)
-    matrix = build_matrix(platform, channel_keys)
+    rows = build_matrix(platform, channel_keys)
+    # GitHub 的 strategy.matrix 必须是对象，动态矩阵统一包成 {"include": [...]}
+    matrix = {"include": rows} if rows else {"include": []}
 
     out = {
         "publish": "true" if publish else "false",
